@@ -647,6 +647,7 @@ internal fun WorkspaceBrowserPanel(
     }
 
 
+    actionEntry?.let { entry ->
         AlertDialog(onDismissRequest = { actionEntry = null },
             title = { Text(entry.name + " options") },
             text = { Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
