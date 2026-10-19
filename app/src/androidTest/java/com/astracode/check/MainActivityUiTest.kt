@@ -65,7 +65,12 @@ class MainActivityUiTest {
     @Test
     fun folderCountsIncludeFilesFoldersAndHiddenEntriesAndHiddenFilesCanBeEdited() {
         composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
-        composeRule.onNodeWithTag("workspace-current-folder-count").assertTextEquals("Workspace root · 4 items")
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching {
+                composeRule.onNodeWithTag("workspace-current-folder-count")
+                    .assertTextEquals("Workspace root · 4 items")
+            }.isSuccess
+        }
         composeRule.onNodeWithTag("workspace-entry-.gitignore").assertIsDisplayed()
         composeRule.waitUntil(timeoutMillis = 5_000) {
             runCatching {
