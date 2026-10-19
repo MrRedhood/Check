@@ -80,6 +80,27 @@ internal object WorkspaceArchiveBrowser {
     fun copy(root: File, archivePath: String, sourcePath: String, targetPath: String) =
         relocate(root, archivePath, validate(sourcePath), validate(targetPath), copy = true)
 
+    fun copyMultiple(root: File, archivePath: String, sourcePaths: List<String>, targetDirectory: String) =
+        relocateMultiple(root, archivePath, sourcePaths, targetDirectory, copy = true)
+
+    fun moveMultiple(root: File, archivePath: String, sourcePaths: List<String>, targetDirectory: String) =
+        relocateMultiple(root, archivePath, sourcePaths, targetDirectory, copy = false)
+
+    fun deleteMultiple(root: File, archivePath: String, sourcePaths: List<String>) {
+        if (sourcePaths.isEmpty()) throw IOException("Select at least one item.")
+        val roots = sourcePaths.map(::validate).distinct().sortedBy { it.count { ch -> ch == '/' } }
+            .filterIndexed { index, path -> sourcePaths.map(::validate).distinct().sortedBy { it.count { ch -> ch == '/' } }
+                .take(index).none { parent -> path == parent || path.startsWith(parent + "/") } }
+        val records = readRecords(root, archivePath)
+        val visible = allRecords(records)
+        roots.forEach { path ->
+            if (visible.none { it.path == path }) throw IOException("Item does not exist inside ZIP: " + path)
+        }
+        save(root, archivePath, records.filterNot { record ->
+            roots.any { selected -> record.path == selected || record.path.startsWith(selected + "/") }
+        })
+    }
+
     fun delete(root: File, archivePath: String, entryPath: String) {
         val path = validate(entryPath)
         val records = readRecords(root, archivePath)
@@ -183,6 +204,62 @@ internal object WorkspaceArchiveBrowser {
         save(root, archivePath, existing)
     }
 
+    private fun relocateMultiple(
+        root: File,
+        archivePath: String,
+        sourcePaths: List<String>,
+        targetDirectory: String,
+        copy: Boolean,
+    ) {
+        if (sourcePaths.isEmpty()) throw IOException("Select at least one item.")
+        val targetFolder = normalizeDirectory(targetDirectory)
+        val records = allRecords(readRecords(root, archivePath))
+        val requested = sourcePaths.map(::validate).distinct()
+            .sortedBy { it.count { ch -> ch == '/' } }
+        val selectedRoots = requested.filterIndexed { index, path ->
+            requested.take(index).none { parent -> path == parent || path.startsWith(parent + "/") }
+        }
+        val mappings = selectedRoots.map { source ->
+            val item = records.firstOrNull { it.path == source }
+                ?: throw IOException("Item does not exist inside ZIP: " + source)
+            if (item.directory && sourcePaths.any { it != source && it.startsWith(source + "/") }) {
+                // Nested selections are collapsed to the parent folder below.
+            }
+            val target = join(targetFolder, source.substringAfterLast('/'))
+            if (source == target) throw IOException("The destination is the current path: " + source)
+            if (item.directory && target.startsWith(source + "/")) {
+                throw IOException("A folder cannot be copied or moved inside itself.")
+            }
+            source to target
+        }
+        val movedRecords = ArrayList<Record>()
+        mappings.forEach { (source, target) ->
+            records.asSequence().filter { it.path == source || it.path.startsWith(source + "/") }.forEach { record ->
+                movedRecords += record.copy(path = target + record.path.removePrefix(source))
+            }
+        }
+        if (movedRecords.map { it.path }.distinct().size != movedRecords.size) {
+            throw IOException("Selected items would create duplicate destination paths.")
+        }
+        val sources = mappings.map { it.first }
+        val destinationRecords = if (copy) records else records.filterNot { record ->
+            sources.any { source -> record.path == source || record.path.startsWith(source + "/") }
+        }
+        val targetNames = movedRecords.mapTo(HashSet()) { it.path }
+        if (destinationRecords.any { it.path in targetNames }) {
+            throw IOException("A destination already exists inside ZIP.")
+        }
+        val output = destinationRecords.toMutableList()
+        movedRecords.sortedBy { it.path.count { ch -> ch == '/' } }.forEach { record ->
+            ensureParents(output, record.path)
+            if (output.any { it.path == record.path }) {
+                throw IOException("Destination already exists inside ZIP: " + record.path)
+            }
+            output += record
+        }
+        save(root, archivePath, output)
+    }
+
     private fun relocate(root: File, archivePath: String, source: String, target: String, copy: Boolean) {
         if (source == target) throw IOException("Source and destination are the same.")
         val records = readRecords(root, archivePath)
@@ -280,7 +357,12 @@ internal object WorkspaceArchiveBrowser {
     private fun ensureParents(records: MutableList<Record>, child: String) {
         var ancestor = parent(child)
         while (ancestor.isNotEmpty()) {
-            if (records.none { it.path == ancestor }) records += Record(ancestor, true, ByteArray(0), System.currentTimeMillis())
+            val existing = records.firstOrNull { it.path == ancestor }
+            if (existing == null) {
+                records += Record(ancestor, true, ByteArray(0), System.currentTimeMillis())
+            } else if (!existing.directory) {
+                throw IOException("A file blocks the ZIP destination path: " + ancestor)
+            }
             ancestor = parent(ancestor)
         }
     }
@@ -290,7 +372,14 @@ internal object WorkspaceArchiveBrowser {
         if (path.isBlank() || path.startsWith('/') || path.contains('\\') || parts.any { it.isBlank() || it == "." || it == ".." })
             throw SecurityException("Invalid workspace archive path.")
         val canonicalRoot = root.canonicalFile
-        val target = File(canonicalRoot, parts.joinToString(File.separator)).canonicalFile
+        var current = canonicalRoot
+        parts.forEach { part ->
+            current = File(current, part)
+            if (Files.isSymbolicLink(current.toPath())) {
+                throw SecurityException("Symbolic links are not supported in workspace archive paths.")
+            }
+        }
+        val target = current.canonicalFile
         if (!target.path.startsWith(canonicalRoot.path + File.separator)) throw SecurityException("Path escapes workspace.")
         return target
     }

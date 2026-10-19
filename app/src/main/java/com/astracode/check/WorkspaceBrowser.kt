@@ -358,6 +358,39 @@ internal fun WorkspaceBrowserPanel(
                     ) { Text("Create ZIP") }
                     TextButton(
                         onClick = {
+                            archiveOperationKind = "copy-selected"
+                            archiveOperationEntry = archiveEntries.firstOrNull { it.path in selectedPaths }
+                            archiveOperationInput = if (archiveDirectory.isEmpty()) "copies" else archiveDirectory + "/copies"
+                        },
+                        enabled = selectedPaths.isNotEmpty(),
+                        modifier = Modifier.testTag("workspace-zip-bulk-copy"),
+                    ) { Text("Copy") }
+                    TextButton(
+                        onClick = {
+                            archiveOperationKind = "move-selected"
+                            archiveOperationEntry = archiveEntries.firstOrNull { it.path in selectedPaths }
+                            archiveOperationInput = if (archiveDirectory.isEmpty()) "moved" else archiveDirectory.substringBeforeLast("/", "")
+                        },
+                        enabled = selectedPaths.isNotEmpty(),
+                        modifier = Modifier.testTag("workspace-zip-bulk-move"),
+                    ) { Text("Move") }
+                    TextButton(
+                        onClick = {
+                            val paths = selectedPaths.toList()
+                            scope.launch {
+                                runCatching {
+                                    withContext(Dispatchers.IO) {
+                                        paths.sorted().joinToString("\\n\\n") { workspaceArchiveMetadataText(root, archivePath.orEmpty(), it) }
+                                    }
+                                }.onSuccess { metadataDetails = it }
+                                    .onFailure { error -> message = error.message ?: "Could not read metadata." }
+                            }
+                        },
+                        enabled = selectedPaths.isNotEmpty(),
+                        modifier = Modifier.testTag("workspace-zip-bulk-metadata"),
+                    ) { Text("Metadata") }
+                    TextButton(
+                        onClick = {
                             archiveOperationKind = "delete-selected"
                             archiveOperationEntry = archiveEntries.firstOrNull { it.path in selectedPaths }
                         },
@@ -546,9 +579,9 @@ internal fun WorkspaceBrowserPanel(
                     }
                     TextButton(onClick = { archiveOperationEntry = item; archiveOperationKind = "rename"; archiveOperationInput = item.name; archiveActionEntry = null },
                         modifier = Modifier.fillMaxWidth().testTag("workspace-zip-action-rename")) { Text("Rename") }
-                    TextButton(onClick = { archiveOperationEntry = item; archiveOperationKind = "copy"; archiveOperationInput = item.path + "-copy"; archiveActionEntry = null },
+                    TextButton(onClick = { archiveOperationEntry = item; archiveOperationKind = "copy"; archiveOperationInput = joinWorkspacePath(item.path.substringBeforeLast("/", ""), "copy-" + item.name); archiveActionEntry = null },
                         modifier = Modifier.fillMaxWidth().testTag("workspace-zip-action-copy")) { Text("Copy") }
-                    TextButton(onClick = { archiveOperationEntry = item; archiveOperationKind = "move"; archiveOperationInput = item.path; archiveActionEntry = null },
+                    TextButton(onClick = { archiveOperationEntry = item; archiveOperationKind = "move"; archiveOperationInput = joinWorkspacePath(item.path.substringBeforeLast("/", ""), "moved-" + item.name); archiveActionEntry = null },
                         modifier = Modifier.fillMaxWidth().testTag("workspace-zip-action-move")) { Text("Move / change path") }
                     TextButton(onClick = { archiveOperationEntry = item; archiveOperationKind = "delete"; archiveOperationInput = ""; archiveActionEntry = null },
                         modifier = Modifier.fillMaxWidth().testTag("workspace-zip-action-delete")) { Text("Delete") }
@@ -568,6 +601,8 @@ internal fun WorkspaceBrowserPanel(
                 "mkdir" -> "Create folder inside archive"
                 "copy" -> "Copy ZIP entry"
                 "move" -> "Move ZIP entry"
+                "copy-selected" -> "Copy selected ZIP entries"
+                "move-selected" -> "Move selected ZIP entries"
                 "delete-selected" -> "Delete selected ZIP entries?"
                 "delete" -> "Delete ZIP entry?"
                 else -> "Rename ZIP entry"
@@ -579,6 +614,7 @@ internal fun WorkspaceBrowserPanel(
                         "extract" -> "Enter the destination folder inside this ZIP. Existing entry paths will not be overwritten."
                         "mkdir" -> "Enter a folder path inside the ZIP."
                         "copy", "move" -> "Enter the destination path relative to the ZIP root."
+                        "copy-selected", "move-selected" -> "Enter the destination folder inside the ZIP."
                         "delete", "delete-selected" -> "Delete this entry and any children from the archive?"
                         else -> "Enter the new name for this item."
                     })
@@ -586,7 +622,7 @@ internal fun WorkspaceBrowserPanel(
                         OutlinedTextField(
                             value = archiveOperationInput,
                             onValueChange = { archiveOperationInput = it },
-                            label = { Text(if (kind == "rename") "Name" else "Path inside ZIP") },
+                            label = { Text(if (kind == "rename") "Name" else if (kind == "copy-selected" || kind == "move-selected") "Destination folder" else "Path inside ZIP") },
                             modifier = Modifier.fillMaxWidth().testTag("workspace-zip-operation-input"),
                         )
                     }
@@ -614,8 +650,10 @@ internal fun WorkspaceBrowserPanel(
                                         "rename" -> WorkspaceArchiveBrowser.rename(root, zip, item.path, raw)
                                         "copy" -> WorkspaceArchiveBrowser.copy(root, zip, item.path, raw)
                                         "move" -> WorkspaceArchiveBrowser.move(root, zip, item.path, raw)
+                                        "copy-selected" -> WorkspaceArchiveBrowser.copyMultiple(root, zip, selectedPathsNow, raw)
+                                        "move-selected" -> WorkspaceArchiveBrowser.moveMultiple(root, zip, selectedPathsNow, raw)
                                         "delete" -> WorkspaceArchiveBrowser.delete(root, zip, item.path)
-                                        "delete-selected" -> selectedPathsNow.forEach { WorkspaceArchiveBrowser.delete(root, zip, it) }
+                                        "delete-selected" -> WorkspaceArchiveBrowser.deleteMultiple(root, zip, selectedPathsNow)
                                         else -> throw IOException("Unknown ZIP action.")
                                     }
                                     syncLinkedWorkspacePaths(root, externalRoot, syncedPaths, zip)

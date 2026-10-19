@@ -72,6 +72,49 @@ class WorkspaceArchiveBrowserTest {
         }
     }
 
+
+    @Test
+    fun bulkCopyMoveAndDeleteWorkInsideZipWithoutExtracting() {
+        val root = Files.createTempDirectory("check-zip-bulk").toFile()
+        try {
+            createZip(File(root, "workspace.zip"), mapOf(
+                "src/Main.kt" to "main".toByteArray(),
+                "src/Util.kt" to "util".toByteArray(),
+                "data.bin" to byteArrayOf(0, -1, 7),
+            ))
+            WorkspaceArchiveBrowser.copyMultiple(root, "workspace.zip", listOf("src/Main.kt", "src/Util.kt"), "backup")
+            assertEquals("main", WorkspaceArchiveBrowser.read(root, "workspace.zip", "backup/Main.kt").toString(Charsets.UTF_8))
+            assertEquals("util", WorkspaceArchiveBrowser.read(root, "workspace.zip", "backup/Util.kt").toString(Charsets.UTF_8))
+
+            WorkspaceArchiveBrowser.moveMultiple(root, "workspace.zip", listOf("data.bin"), "moved")
+            assertEquals(listOf("data.bin"), WorkspaceArchiveBrowser.list(root, "workspace.zip", "moved").map { it.name })
+            assertArrayEquals(byteArrayOf(0, -1, 7), WorkspaceArchiveBrowser.read(root, "workspace.zip", "moved/data.bin"))
+
+            WorkspaceArchiveBrowser.deleteMultiple(root, "workspace.zip", listOf("backup"))
+            assertTrue(WorkspaceArchiveBrowser.list(root, "workspace.zip").none { it.name == "backup" })
+            assertFalse(File(root, "moved").exists())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun aFileCannotBeUsedAsAFolderInsideTheArchive() {
+        val root = Files.createTempDirectory("check-zip-parent-conflict").toFile()
+        try {
+            createZip(File(root, "workspace.zip"), mapOf("locked" to "keep".toByteArray()))
+            try {
+                WorkspaceArchiveBrowser.write(root, "workspace.zip", "locked/child.txt", "bad".toByteArray())
+                fail("A file should not be replaced by an implicit folder")
+            } catch (expected: java.io.IOException) {
+                assertTrue(expected.message.orEmpty().contains("blocks", ignoreCase = true))
+            }
+            assertEquals("keep", WorkspaceArchiveBrowser.read(root, "workspace.zip", "locked").toString(Charsets.UTF_8))
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
     @Test
     fun unsafeEntryNamesAreRejectedAndExistingArchiveIsNotDamaged() {
         val root = Files.createTempDirectory("check-unsafe-zip").toFile()
