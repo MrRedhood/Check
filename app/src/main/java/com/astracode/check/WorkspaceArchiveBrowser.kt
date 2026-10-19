@@ -61,6 +61,15 @@ internal object WorkspaceArchiveBrowser {
         save(root, archivePath, records)
     }
 
+    fun createDirectory(root: File, archivePath: String, directoryPath: String) {
+        val path = validate(directoryPath)
+        val records = readRecords(root, archivePath).toMutableList()
+        if (allRecords(records).any { it.path == path }) throw IOException("Item already exists inside ZIP: " + path)
+        ensureParents(records, path)
+        records += Record(path, true, ByteArray(0), System.currentTimeMillis())
+        save(root, archivePath, records)
+    }
+
     fun rename(root: File, archivePath: String, sourcePath: String, newName: String) {
         if (!simpleName(newName)) throw IOException("Enter a valid name without path separators.")
         val source = validate(sourcePath)
