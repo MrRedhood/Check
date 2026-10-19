@@ -208,6 +208,26 @@ internal fun WorkspaceBrowserPanel(
                     modifier = Modifier.testTag("workspace-bulk-move"),
                 ) { Text("Move") }
                 TextButton(
+                    onClick = { bulkActionKind = "copy"; bulkInput = currentDirectory },
+                    enabled = selectedPaths.isNotEmpty(),
+                    modifier = Modifier.testTag("workspace-bulk-copy"),
+                ) { Text("Copy") }
+                TextButton(
+                    onClick = {
+                        val paths = selectedPaths.sorted()
+                        scope.launch {
+                            runCatching {
+                                withContext(Dispatchers.IO) {
+                                    paths.joinToString("\n\n") { workspaceMetadataText(root, it) }
+                                }
+                            }.onSuccess { metadataDetails = it }
+                                .onFailure { error -> message = error.message ?: "Could not read metadata." }
+                        }
+                    },
+                    enabled = selectedPaths.isNotEmpty(),
+                    modifier = Modifier.testTag("workspace-bulk-metadata"),
+                ) { Text("Metadata") }
+                TextButton(
                     onClick = { bulkActionKind = "delete" },
                     enabled = selectedPaths.isNotEmpty(),
                     modifier = Modifier.testTag("workspace-bulk-delete"),
@@ -793,6 +813,7 @@ internal fun WorkspaceBrowserPanel(
                 Text(when (kind) {
                     "zip" -> "Create ZIP from ${selected.size} item(s)"
                     "move" -> "Move ${selected.size} item(s)"
+                    "copy" -> "Copy ${selected.size} item(s)"
                     else -> "Delete ${selected.size} item(s)?"
                 })
             },
@@ -801,6 +822,7 @@ internal fun WorkspaceBrowserPanel(
                     Text(when (kind) {
                         "zip" -> "Create an archive containing the selected files and folders. File contents are kept exactly as they are."
                         "move" -> "Enter a destination folder relative to the workspace root. The folder will be created if needed."
+                        "copy" -> "Copy selected items into a destination folder. The folder will be created if needed."
                         else -> "Delete all selected items and their contents. Linked external copies will also be deleted where they exist."
                     })
                     if (kind != "delete") {
@@ -836,7 +858,7 @@ internal fun WorkspaceBrowserPanel(
                                             syncLinkedWorkspacePaths(root, externalRoot, links, archivePath)
                                             "Created $zipName"
                                         }
-                                        "move" -> {
+                                        "move", "copy" -> {
                                             val destinationFolder = if (raw.isBlank()) root.canonicalFile else resolveWorkspacePath(root, raw)
                                             if (destinationFolder.exists() && !destinationFolder.isDirectory) throw IOException("The destination is not a folder.")
                                             val destinations = paths.map { sourcePath ->
@@ -853,14 +875,19 @@ internal fun WorkspaceBrowserPanel(
                                             if (destinations.toSet().size != destinations.size) throw IOException("Multiple items have the same destination.")
                                             if (!destinationFolder.exists() && !destinationFolder.mkdirs()) throw IOException("Could not create the destination folder.")
                                             paths.zip(destinations).forEach { (sourcePath, targetPath) ->
-                                                val source = resolveWorkspacePath(root, sourcePath)
-                                                val target = resolveWorkspacePath(root, targetPath)
-                                                target.parentFile?.let { if (!it.exists() && !it.mkdirs()) throw IOException("Could not create destination parent.") }
-                                                try { Files.move(source.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE) }
-                                                catch (_: java.nio.file.AtomicMoveNotSupportedException) { Files.move(source.toPath(), target.toPath()) }
-                                                links = updateSyncedPathsAfterMove(context, root, externalRoot, links, sourcePath, targetPath)
+                                                if (kind == "move") {
+                                                    val source = resolveWorkspacePath(root, sourcePath)
+                                                    val target = resolveWorkspacePath(root, targetPath)
+                                                    target.parentFile?.let { if (!it.exists() && !it.mkdirs()) throw IOException("Could not create destination parent.") }
+                                                    try { Files.move(source.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE) }
+                                                    catch (_: java.nio.file.AtomicMoveNotSupportedException) { Files.move(source.toPath(), target.toPath()) }
+                                                    links = updateSyncedPathsAfterMove(context, root, externalRoot, links, sourcePath, targetPath)
+                                                } else {
+                                                    copyWorkspaceEntry(root, sourcePath, targetPath)
+                                                    syncLinkedWorkspacePaths(root, externalRoot, links, targetPath)
+                                                }
                                             }
-                                            "Moved ${paths.size} item(s)"
+                                            (if (kind == "move") "Moved " else "Copied ") + paths.size + " item(s)"
                                         }
                                         else -> {
                                             paths.sortedByDescending { it.count { ch -> ch == '/' } }.forEach { path ->
@@ -890,7 +917,7 @@ internal fun WorkspaceBrowserPanel(
                         }
                     },
                     modifier = Modifier.testTag("confirm-workspace-bulk-action"),
-                ) { Text(when (kind) { "zip" -> "Create ZIP"; "move" -> "Move"; else -> "Delete" }) }
+                ) { Text(when (kind) { "zip" -> "Create ZIP"; "copy" -> "Copy"; "move" -> "Move"; else -> "Delete" }) }
             },
             dismissButton = {
                 TextButton(onClick = { bulkActionKind = null }) { Text("Cancel") }
