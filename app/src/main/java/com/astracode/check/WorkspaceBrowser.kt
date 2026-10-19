@@ -55,6 +55,7 @@ private data class WorkspaceEntry(
     val isHidden: Boolean,
 )
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun WorkspaceBrowserPanel(
     root: File,
