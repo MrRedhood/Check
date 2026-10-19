@@ -116,6 +116,27 @@ class WorkspaceArchiveBrowserTest {
     }
 
 
+
+    @Test
+    fun canRenameCopyAndMoveAnImplicitFolderInsideZip() {
+        val root = Files.createTempDirectory("check-zip-implicit-folder").toFile()
+        try {
+            createZip(File(root, "workspace.zip"), mapOf(
+                "src/Main.kt" to "main".toByteArray(),
+                "src/lib/Util.kt" to "util".toByteArray(),
+            ))
+            // This archive has no explicit "src/" directory entry, but its folder must still be manageable.
+            WorkspaceArchiveBrowser.rename(root, "workspace.zip", "src", "source")
+            assertEquals("main", WorkspaceArchiveBrowser.read(root, "workspace.zip", "source/Main.kt").toString(Charsets.UTF_8))
+            WorkspaceArchiveBrowser.copy(root, "workspace.zip", "source", "backup")
+            assertEquals("util", WorkspaceArchiveBrowser.read(root, "workspace.zip", "backup/lib/Util.kt").toString(Charsets.UTF_8))
+            WorkspaceArchiveBrowser.move(root, "workspace.zip", "backup", "archive")
+            assertEquals("main", WorkspaceArchiveBrowser.read(root, "workspace.zip", "archive/Main.kt").toString(Charsets.UTF_8))
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
     @Test
     fun rejectsArchiveEntriesWhereAFileIsAlsoUsedAsAParentFolder() {
         val root = Files.createTempDirectory("check-zip-hierarchy").toFile()

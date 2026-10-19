@@ -222,9 +222,6 @@ internal object WorkspaceArchiveBrowser {
         val mappings = selectedRoots.map { source ->
             val item = records.firstOrNull { it.path == source }
                 ?: throw IOException("Item does not exist inside ZIP: " + source)
-            if (item.directory && sourcePaths.any { it != source && it.startsWith(source + "/") }) {
-                // Nested selections are collapsed to the parent folder below.
-            }
             val target = join(targetFolder, source.substringAfterLast('/'))
             if (source == target) throw IOException("The destination is the current path: " + source)
             if (item.directory && target.startsWith(source + "/")) {
@@ -245,7 +242,7 @@ internal object WorkspaceArchiveBrowser {
         val destinationRecords = if (copy) records else records.filterNot { record ->
             sources.any { source -> record.path == source || record.path.startsWith(source + "/") }
         }
-        val targetNames = movedRecords.mapTo(HashSet()) { it.path }
+        val targetNames = movedRecords.map { it.path }.toSet()
         if (destinationRecords.any { it.path in targetNames }) {
             throw IOException("A destination already exists inside ZIP.")
         }
@@ -262,7 +259,7 @@ internal object WorkspaceArchiveBrowser {
 
     private fun relocate(root: File, archivePath: String, source: String, target: String, copy: Boolean) {
         if (source == target) throw IOException("Source and destination are the same.")
-        val records = readRecords(root, archivePath)
+        val records = allRecords(readRecords(root, archivePath))
         val top = records.firstOrNull { it.path == source } ?: throw IOException("Item does not exist inside ZIP: " + source)
         if (top.directory && target.startsWith(source + "/")) throw IOException("A folder cannot be moved or copied inside itself.")
         val moving = records.filter { it.path == source || it.path.startsWith(source + "/") }
@@ -299,7 +296,7 @@ internal object WorkspaceArchiveBrowser {
                         if (n < 0) break
                         if (n == 0) continue
                         expanded += n
-                        if (expanded > MAX_EXPANDED_BYTES) throw IOException("ZIP expands beyond the 128 MiB safety limit.")
+                        if (expanded > MAX_EXPANDED_BYTES) throw IOException("ZIP expands beyond the 64 MiB safety limit.")
                         out.write(buffer, 0, n)
                     }
                 }
