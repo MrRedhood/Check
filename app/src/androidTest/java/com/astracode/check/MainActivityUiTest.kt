@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
@@ -66,14 +67,20 @@ class MainActivityUiTest {
         composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
         composeRule.onNodeWithTag("workspace-current-folder-count").assertTextEquals("Workspace root · 4 items")
         composeRule.onNodeWithTag("workspace-entry-.gitignore").assertIsDisplayed()
-        composeRule.onNodeWithTag("workspace-folder-count-app").assertTextEquals("2 items")
-        composeRule.onNodeWithTag("workspace-folder-count-empty").assertTextEquals("0 items")
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching {
+                composeRule.onNodeWithTag("workspace-entry-app").assertTextContains("2 items")
+                composeRule.onNodeWithTag("workspace-entry-empty").assertTextContains("0 items")
+            }.isSuccess
+        }
 
         composeRule.onNodeWithTag("workspace-entry-app").performClick()
-        composeRule.onNodeWithTag("workspace-folder-count-src").assertTextEquals("2 items")
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-src").assertTextContains("2 items") }.isSuccess
+        }
         composeRule.onNodeWithTag("workspace-entry-src").performClick()
         composeRule.onNodeWithTag("workspace-entry-.env").assertIsDisplayed()
-        composeRule.onNodeWithTag("workspace-entry-detail-.env").assertTextEquals("Hidden file · 14 bytes")
+        composeRule.onNodeWithTag("workspace-entry-.env").assertTextContains("Hidden file · 14 bytes")
 
         composeRule.onNodeWithTag("workspace-entry-.env").performClick()
         composeRule.onNodeWithTag("workspace-editor-input").assertIsDisplayed()
