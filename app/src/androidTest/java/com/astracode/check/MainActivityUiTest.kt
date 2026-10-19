@@ -252,4 +252,57 @@ class MainActivityUiTest {
         )
     }
 
+
+    @Test
+    fun opensEditsAndManagesZipEntriesWithoutExtracting() {
+        WorkspaceArchive.createZip(
+            workspaceRoot,
+            listOf("app/src/Main.kt"),
+            "project.zip",
+            "app/src",
+        )
+        composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-project.zip").assertIsDisplayed() }.isSuccess
+        }
+
+        composeRule.onNodeWithTag("workspace-entry-project.zip").performTouchInput { longClick() }
+        composeRule.onNodeWithTag("workspace-action-metadata").performClick()
+        composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Name: project.zip")
+        composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Created:")
+        composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Modified:")
+        composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Format: ZIP")
+        composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Storage path:")
+        composeRule.onNodeWithText("Close").performClick()
+
+        composeRule.onNodeWithTag("workspace-entry-project.zip").performTouchInput { longClick() }
+        composeRule.onNodeWithTag("workspace-action-browse-zip").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-zip-entry-Main.kt").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-zip-entry-Main.kt").performClick()
+        composeRule.onNodeWithTag("workspace-zip-editor-input").performTextReplacement("fun main() = 7\n")
+        composeRule.onNodeWithTag("workspace-zip-save-file").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching {
+                WorkspaceArchiveBrowser.read(workspaceRoot, "project.zip", "Main.kt")
+                    .toString(Charsets.UTF_8) == "fun main() = 7\n"
+            }.getOrDefault(false)
+        }
+        assertFalse(File(workspaceRoot, "Main.kt").exists())
+
+        composeRule.onNodeWithTag("workspace-zip-editor-back").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-zip-entry-Main.kt").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-zip-entry-Main.kt").performTouchInput { longClick() }
+        composeRule.onNodeWithTag("workspace-zip-action-rename").performClick()
+        composeRule.onNodeWithTag("workspace-zip-operation-input").performTextReplacement("App.kt")
+        composeRule.onNodeWithTag("workspace-zip-confirm-operation").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-zip-entry-App.kt").assertIsDisplayed() }.isSuccess
+        }
+        assertEquals("fun main() = 7\n", WorkspaceArchiveBrowser.read(workspaceRoot, "project.zip", "App.kt").toString(Charsets.UTF_8))
+    }
+
 }
