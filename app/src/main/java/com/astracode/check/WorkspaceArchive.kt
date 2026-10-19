@@ -25,12 +25,22 @@ internal object WorkspaceArchive {
     private const val MAX_EXTRACTED_BYTES = 512L * 1024L * 1024L
     private const val MAX_PATH_DEPTH = 128
 
-    fun createZip(workspaceRoot: File, sourcePaths: List<String>, archivePath: String): File {
+    fun createZip(
+        workspaceRoot: File,
+        sourcePaths: List<String>,
+        archivePath: String,
+        archiveBasePath: String = "",
+    ): File {
         val root = workspaceRoot.canonicalFile
         if (sourcePaths.isEmpty()) throw IOException("Select at least one item to archive.")
         val target = resolve(root, archivePath)
         if (target.exists()) throw IOException("Destination already exists: $archivePath")
+        val base = if (archiveBasePath.isBlank()) root else resolve(root, archiveBasePath)
+        if (!base.isDirectory) throw IOException("The archive base must be a folder.")
         val sources = normalizeSources(root, sourcePaths)
+        if (sources.any { !it.toPath().startsWith(base.toPath()) }) {
+            throw IOException("All selected items must be inside the current folder.")
+        }
         if (sources.any { source ->
                 source == target || (source.isDirectory && target.path.startsWith(source.path + File.separator))
             }) {
@@ -73,7 +83,8 @@ internal object WorkspaceArchive {
                     }
                 }
                 sources.forEach { source ->
-                    val relative = root.toPath().relativize(source.toPath()).toString().replace(File.separatorChar, '/')
+                    val relative = base.toPath().relativize(source.toPath()).toString().replace(File.separatorChar, '/')
+                    if (relative.isBlank() || relative == ".") throw IOException("Cannot archive the workspace root itself.")
                     addFile(source, relative)
                 }
             }

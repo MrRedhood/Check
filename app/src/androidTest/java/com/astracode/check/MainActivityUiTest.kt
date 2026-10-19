@@ -199,4 +199,57 @@ class MainActivityUiTest {
         }
     }
 
+    @Test
+    fun createsAndExtractsZipForMultipleItemsAndUpdatesLinkedExternalFolder() {
+        val externalRoot = File(
+            InstrumentationRegistry.getInstrumentation().targetContext.filesDir,
+            "external-workspace",
+        )
+        composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-app").assertIsDisplayed() }.isSuccess
+        }
+
+        composeRule.onNodeWithTag("workspace-entry-app").performTouchInput { longClick() }
+        composeRule.onNodeWithTag("workspace-action-sync").performClick()
+        composeRule.onNodeWithTag("sync-app-to-external").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            File(externalRoot, "app/src/.env").takeIf { it.exists() }?.readText() == "TOKEN=original"
+        }
+
+        composeRule.onNodeWithTag("workspace-entry-app").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-build.gradle.kts").assertIsDisplayed() }.isSuccess
+        }
+
+        composeRule.onNodeWithTag("workspace-toggle-selection").performClick()
+        composeRule.onNodeWithTag("workspace-select-build.gradle.kts").performClick()
+        composeRule.onNodeWithTag("workspace-select-src").performClick()
+        composeRule.onNodeWithTag("workspace-bulk-zip").performClick()
+        composeRule.onNodeWithTag("workspace-bulk-input").performTextReplacement("bundle.zip")
+        composeRule.onNodeWithTag("confirm-workspace-bulk-action").performClick()
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            File(workspaceRoot, "app/bundle.zip").isFile &&
+                File(externalRoot, "app/bundle.zip").isFile
+        }
+
+        composeRule.onNodeWithTag("workspace-entry-bundle.zip").performTouchInput { longClick() }
+        composeRule.onNodeWithTag("workspace-action-extract").performClick()
+        composeRule.onNodeWithTag("workspace-operation-input").performTextReplacement("app/restored")
+        composeRule.onNodeWithTag("confirm-workspace-operation").performClick()
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            File(workspaceRoot, "app/restored/build.gradle.kts").isFile &&
+                File(workspaceRoot, "app/restored/src/Main.kt").isFile &&
+                File(externalRoot, "app/restored/src/Main.kt").isFile
+        }
+        assertEquals("plugins {}\n", File(workspaceRoot, "app/restored/build.gradle.kts").readText())
+        assertEquals("fun main() = Unit\n", File(workspaceRoot, "app/restored/src/Main.kt").readText())
+        assertEquals(
+            "TOKEN=original",
+            File(workspaceRoot, "app/restored/src/.env").readText(),
+        )
+    }
+
 }

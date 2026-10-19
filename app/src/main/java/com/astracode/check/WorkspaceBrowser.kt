@@ -473,7 +473,7 @@ internal fun WorkspaceBrowserPanel(
                                             }
                                             if (!isSimpleWorkspaceName(zipName)) throw IOException("Enter a ZIP file name without path separators.")
                                             val archivePath = joinWorkspacePath(currentDirectory, zipName)
-                                            WorkspaceArchive.createZip(root, paths, archivePath)
+                                            WorkspaceArchive.createZip(root, paths, archivePath, currentDirectory)
                                             syncLinkedWorkspacePaths(root, externalRoot, links, archivePath)
                                             "Created $zipName"
                                         }
