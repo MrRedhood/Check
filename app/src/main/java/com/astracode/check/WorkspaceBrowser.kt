@@ -934,6 +934,67 @@ internal fun WorkspaceBrowserPanel(
 }
 
 
+
+private fun workspaceMetadataText(root: File, relativePath: String): String {
+    val file = resolveWorkspacePath(root, relativePath)
+    if (!file.exists()) throw IOException("Item no longer exists: " + relativePath)
+    val attributes = Files.readAttributes(
+        file.toPath(),
+        java.nio.file.attribute.BasicFileAttributes::class.java,
+        LinkOption.NOFOLLOW_LINKS,
+    )
+    val isDirectory = attributes.isDirectory
+    val size = if (isDirectory) {
+        Files.walk(file.toPath()).use { stream ->
+            stream.iterator().asSequence()
+                .filter { Files.isRegularFile(it, LinkOption.NOFOLLOW_LINKS) }
+                .sumOf { Files.size(it) }
+        }
+    } else attributes.size()
+    val format = if (isDirectory) "Folder" else
+        file.name.substringAfterLast('.', "").takeIf { it.isNotBlank() }?.uppercase() ?: "Unknown"
+    return "Name: " + file.name +
+        "\nType: " + if (isDirectory) "Folder" else "File" +
+        "\nSize: " + size + " bytes" +
+        "\nCreated: " + attributes.creationTime().toInstant().toString() +
+        "\nModified: " + attributes.lastModifiedTime().toInstant().toString() +
+        "\nFormat: " + format +
+        "\nStorage path: " + file.absolutePath
+}
+
+private fun workspaceArchiveMetadataText(root: File, archivePath: String, entryPath: String): String {
+    val item = WorkspaceArchiveBrowser.metadata(root, archivePath, entryPath)
+    return "Name: " + item.name +
+        "\nType: " + if (item.isDirectory) "Folder" else "File" +
+        "\nSize: " + item.sizeBytes + " bytes" +
+        "\nCreated: Not recorded by this ZIP entry" +
+        "\nModified: " + (item.modifiedAtMillis?.let { java.time.Instant.ofEpochMilli(it).toString() } ?: "Not recorded") +
+        "\nFormat: " + item.format +
+        "\nStorage path: " + archivePath + "!/" + item.path
+}
+
+private fun readWorkspaceArchiveText(root: File, archivePath: String, entryPath: String): String {
+    val extension = entryPath.substringAfterLast('.', "").lowercase()
+    val supported = setOf(
+        "kt", "kts", "java", "xml", "json", "md", "txt", "gradle", "properties",
+        "html", "htm", "css", "js", "jsx", "ts", "tsx", "py", "sh", "bash",
+        "c", "h", "cc", "cpp", "hpp", "yml", "yaml", "toml", "ini", "cfg",
+        "conf", "sql", "rs", "go", "rb", "php", "dart", "swift", "log", "csv",
+        "env", "gitignore", "makefile",
+    )
+    if (extension !in supported) {
+        throw IOException("This file is not a supported text or source file. Open Metadata or extract it to use another viewer.")
+    }
+    val bytes = WorkspaceArchiveBrowser.read(root, archivePath, entryPath)
+    if (bytes.size.toLong() > MAX_WORKSPACE_TEXT_BYTES) {
+        throw IOException("Files larger than 8 MB cannot be edited in the current editor.")
+    }
+    if (bytes.any { it == 0.toByte() }) {
+        throw IOException("This file contains binary data. It remains available inside the ZIP and can be extracted if needed.")
+    }
+    return bytes.toString(Charsets.UTF_8)
+}
+
 private const val CHECK_SYNC_PREFS = "check_workspace_sync"
 private fun syncPreferencesKey(root: File): String = "links:" + root.canonicalPath
 private fun loadSyncedPaths(context: android.content.Context, root: File): Set<String> {
