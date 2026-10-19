@@ -593,6 +593,9 @@ private fun saveSyncedPaths(context: android.content.Context, root: File, paths:
         .edit().putString(syncPreferencesKey(root), array.toString()).apply()
     return normalized
 }
+private fun joinWorkspacePath(parent: String, child: String): String =
+    if (parent.isBlank()) child else "$parent/$child"
+
 private fun isSimpleWorkspaceName(value: String): Boolean =
     value.isNotBlank() && value != "." && value != ".." && !value.contains('/') &&
         !value.contains('\\') && value.indexOf('\u0000') < 0
