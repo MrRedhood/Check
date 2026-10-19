@@ -484,7 +484,149 @@ internal fun WorkspaceBrowserPanel(
         }
     }
 
-    actionEntry?.let { entry ->
+
+    archiveActionEntry?.let { item ->
+        AlertDialog(
+            onDismissRequest = { archiveActionEntry = null },
+            title = { Text(item.name + " options inside ZIP") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    TextButton(onClick = {
+                        scope.launch {
+                            runCatching {
+                                withContext(Dispatchers.IO) {
+                                    workspaceArchiveMetadataText(root, archivePath.orEmpty(), item.path)
+                                }
+                            }.onSuccess { metadataDetails = it; archiveActionEntry = null }
+                                .onFailure { error -> message = error.message ?: "Could not read metadata." }
+                        }
+                    }, modifier = Modifier.fillMaxWidth().testTag("workspace-zip-action-metadata")) { Text("Metadata") }
+                    TextButton(onClick = {
+                        archiveOperationEntry = item
+                        archiveOperationKind = "zip"
+                        archiveOperationInput = if (archiveDirectory.isEmpty()) item.name + ".zip" else archiveDirectory + "/" + item.name + ".zip"
+                        selectedPaths = emptySet()
+                        archiveActionEntry = null
+                    }, modifier = Modifier.fillMaxWidth().testTag("workspace-zip-action-create-zip")) { Text("Create ZIP inside this ZIP") }
+                    if (!item.isDirectory && item.name.endsWith(".zip", ignoreCase = true)) {
+                        TextButton(onClick = {
+                            archiveOperationEntry = item
+                            archiveOperationKind = "extract"
+                            archiveOperationInput = if (archiveDirectory.isEmpty()) item.name.removeSuffix(".zip") else archiveDirectory + "/" + item.name.removeSuffix(".zip")
+                            archiveActionEntry = null
+                        }, modifier = Modifier.fillMaxWidth().testTag("workspace-zip-action-extract")) { Text("Extract inside this ZIP") }
+                    }
+                    if (item.isDirectory) {
+                        TextButton(onClick = {
+                            archiveOperationEntry = item
+                            archiveOperationKind = "mkdir"
+                            archiveOperationInput = item.path + "/new-folder"
+                            archiveActionEntry = null
+                        }, modifier = Modifier.fillMaxWidth().testTag("workspace-zip-action-new-folder")) { Text("New folder") }
+                    }
+                    TextButton(onClick = { archiveOperationEntry = item; archiveOperationKind = "rename"; archiveOperationInput = item.name; archiveActionEntry = null },
+                        modifier = Modifier.fillMaxWidth().testTag("workspace-zip-action-rename")) { Text("Rename") }
+                    TextButton(onClick = { archiveOperationEntry = item; archiveOperationKind = "copy"; archiveOperationInput = item.path + "-copy"; archiveActionEntry = null },
+                        modifier = Modifier.fillMaxWidth().testTag("workspace-zip-action-copy")) { Text("Copy") }
+                    TextButton(onClick = { archiveOperationEntry = item; archiveOperationKind = "move"; archiveOperationInput = item.path; archiveActionEntry = null },
+                        modifier = Modifier.fillMaxWidth().testTag("workspace-zip-action-move")) { Text("Move / change path") }
+                    TextButton(onClick = { archiveOperationEntry = item; archiveOperationKind = "delete"; archiveOperationInput = ""; archiveActionEntry = null },
+                        modifier = Modifier.fillMaxWidth().testTag("workspace-zip-action-delete")) { Text("Delete") }
+                }
+            },
+            confirmButton = { TextButton(onClick = { archiveActionEntry = null }) { Text("Cancel") } },
+        )
+    }
+
+    archiveOperationEntry?.let { item ->
+        val kind = archiveOperationKind.orEmpty()
+        AlertDialog(
+            onDismissRequest = { archiveOperationEntry = null; archiveOperationKind = null },
+            title = { Text(when (kind) {
+                "zip" -> "Create ZIP inside archive"
+                "extract" -> "Extract ZIP inside archive"
+                "mkdir" -> "Create folder inside archive"
+                "copy" -> "Copy ZIP entry"
+                "move" -> "Move ZIP entry"
+                "delete-selected" -> "Delete selected ZIP entries?"
+                "delete" -> "Delete ZIP entry?"
+                else -> "Rename ZIP entry"
+            }) },
+            text = {
+                Column {
+                    Text(when (kind) {
+                        "zip" -> "Compress selected file(s) or folder(s) into a nested ZIP. Nothing is extracted to the workspace."
+                        "extract" -> "Enter the destination folder inside this ZIP. Existing entry paths will not be overwritten."
+                        "mkdir" -> "Enter a folder path inside the ZIP."
+                        "copy", "move" -> "Enter the destination path relative to the ZIP root."
+                        "delete", "delete-selected" -> "Delete this entry and any children from the archive?"
+                        else -> "Enter the new name for this item."
+                    })
+                    if (kind != "delete" && kind != "delete-selected") {
+                        OutlinedTextField(
+                            value = archiveOperationInput,
+                            onValueChange = { archiveOperationInput = it },
+                            label = { Text(if (kind == "rename") "Name" else "Path inside ZIP") },
+                            modifier = Modifier.fillMaxWidth().testTag("workspace-zip-operation-input"),
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val zip = archivePath ?: return@TextButton
+                        val raw = archiveOperationInput.trim()
+                        val action = archiveOperationKind.orEmpty()
+                        val selectedPathsNow = selectedPaths.toList()
+                        scope.launch {
+                            runCatching {
+                                withContext(Dispatchers.IO) {
+                                    when (action) {
+                                        "zip" -> {
+                                            val output = if (raw.lowercase().endsWith(".zip")) raw else raw + ".zip"
+                                            val chosen = if (selectedPathsNow.isNotEmpty()) selectedPathsNow
+                                                else listOf(item.path)
+                                            WorkspaceArchiveBrowser.createNestedZip(root, zip, chosen, output, archiveDirectory)
+                                        }
+                                        "extract" -> WorkspaceArchiveBrowser.extractNestedZip(root, zip, item.path, raw)
+                                        "mkdir" -> WorkspaceArchiveBrowser.createDirectory(root, zip, raw)
+                                        "rename" -> WorkspaceArchiveBrowser.rename(root, zip, item.path, raw)
+                                        "copy" -> WorkspaceArchiveBrowser.copy(root, zip, item.path, raw)
+                                        "move" -> WorkspaceArchiveBrowser.move(root, zip, item.path, raw)
+                                        "delete" -> WorkspaceArchiveBrowser.delete(root, zip, item.path)
+                                        "delete-selected" -> selectedPathsNow.forEach { WorkspaceArchiveBrowser.delete(root, zip, it) }
+                                        else -> throw IOException("Unknown ZIP action.")
+                                    }
+                                    syncLinkedWorkspacePaths(root, externalRoot, syncedPaths, zip)
+                                }
+                            }.onSuccess {
+                                archiveOperationEntry = null
+                                archiveOperationKind = null
+                                selectedPaths = emptySet()
+                                selectionMode = false
+                                refreshKey++
+                                message = "Updated ZIP: " + zip.substringAfterLast("/")
+                            }.onFailure { error -> message = error.message ?: "Could not update ZIP archive." }
+                        }
+                    },
+                    modifier = Modifier.testTag("workspace-zip-confirm-operation"),
+                ) { Text("Apply") }
+            },
+            dismissButton = { TextButton(onClick = { archiveOperationEntry = null; archiveOperationKind = null }) { Text("Cancel") } },
+        )
+    }
+
+    metadataDetails?.let { details ->
+        AlertDialog(
+            onDismissRequest = { metadataDetails = null },
+            title = { Text("File metadata") },
+            text = { Text(details, modifier = Modifier.testTag("workspace-metadata-details")) },
+            confirmButton = { TextButton(onClick = { metadataDetails = null }) { Text("Close") } },
+        )
+    }
+
+
         AlertDialog(onDismissRequest = { actionEntry = null },
             title = { Text(entry.name + " options") },
             text = { Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -510,6 +652,22 @@ internal fun WorkspaceBrowserPanel(
                         modifier = Modifier.fillMaxWidth().testTag("workspace-action-extract"),
                     ) { Text("Extract ZIP") }
                 }
+                if (entry.name.endsWith(".zip", ignoreCase = true) && !entry.isDirectory) {
+                    TextButton(onClick = {
+                        archivePath = entry.path
+                        archiveDirectory = ""
+                        openedArchiveEntry = null
+                        actionEntry = null
+                        refreshKey++
+                    }, modifier = Modifier.fillMaxWidth().testTag("workspace-action-browse-zip")) { Text("Browse ZIP without extracting") }
+                }
+                TextButton(onClick = {
+                    scope.launch {
+                        runCatching { withContext(Dispatchers.IO) { workspaceMetadataText(root, entry.path) } }
+                            .onSuccess { metadataDetails = it; actionEntry = null }
+                            .onFailure { error -> message = error.message ?: "Could not read metadata." }
+                    }
+                }, modifier = Modifier.fillMaxWidth().testTag("workspace-action-metadata")) { Text("Metadata") }
                 TextButton(onClick = { syncEntry = entry; actionEntry = null },
                     modifier = Modifier.fillMaxWidth().testTag("workspace-action-sync")) { Text("Sync") }
                 TextButton(onClick = { operationEntry = entry; operationKind = "rename"; operationInput = entry.name; actionEntry = null },
