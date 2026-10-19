@@ -15,7 +15,7 @@ import java.util.zip.ZipOutputStream
 internal object WorkspaceArchiveBrowser {
     private const val MAX_ARCHIVE_BYTES = 32 * 1024 * 1024
     private const val MAX_ENTRY_BYTES = 32 * 1024 * 1024
-    private const val MAX_EXPANDED_BYTES = 128L * 1024L * 1024L
+    private const val MAX_EXPANDED_BYTES = 64L * 1024L * 1024L
     private const val MAX_ENTRIES = 10_000
 
     data class Entry(val path: String, val name: String, val isDirectory: Boolean, val sizeBytes: Long,
@@ -178,7 +178,7 @@ internal object WorkspaceArchiveBrowser {
                         if (n < 0) break
                         if (n == 0) continue
                         expanded += n
-                        if (expanded > MAX_EXPANDED_BYTES) throw IOException("Nested ZIP expands beyond the 128 MiB safety limit.")
+                        if (expanded > MAX_EXPANDED_BYTES) throw IOException("Nested ZIP expands beyond the 64 MiB safety limit.")
                         out.write(buffer, 0, n)
                     }
                 }
@@ -307,6 +307,7 @@ internal object WorkspaceArchiveBrowser {
                 zip.closeEntry()
             }
         }
+        validateHierarchy(records)
         return records
     }
 
@@ -327,6 +328,7 @@ internal object WorkspaceArchiveBrowser {
     }
 
     private fun save(root: File, archivePath: String, records: List<Record>) {
+        validateHierarchy(records)
         val archive = resolve(root, archivePath)
         val output = BoundedOutput(MAX_ARCHIVE_BYTES)
         val seen = HashSet<String>()
@@ -351,6 +353,20 @@ internal object WorkspaceArchiveBrowser {
         } catch (error: Exception) {
             temp.delete()
             throw error
+        }
+    }
+
+    private fun validateHierarchy(records: List<Record>) {
+        val byPath = records.associateBy { it.path }
+        records.forEach { record ->
+            var ancestor = parent(record.path)
+            while (ancestor.isNotEmpty()) {
+                val parentRecord = byPath[ancestor]
+                if (parentRecord != null && !parentRecord.directory) {
+                    throw IOException("ZIP file entry conflicts with a child path: " + ancestor)
+                }
+                ancestor = parent(ancestor)
+            }
         }
     }
 

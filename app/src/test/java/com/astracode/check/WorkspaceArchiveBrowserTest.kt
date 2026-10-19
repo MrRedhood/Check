@@ -115,6 +115,30 @@ class WorkspaceArchiveBrowserTest {
         }
     }
 
+
+    @Test
+    fun rejectsArchiveEntriesWhereAFileIsAlsoUsedAsAParentFolder() {
+        val root = Files.createTempDirectory("check-zip-hierarchy").toFile()
+        try {
+            ZipOutputStream(File(root, "broken.zip").outputStream()).use { zip ->
+                zip.putNextEntry(ZipEntry("locked"))
+                zip.write("file".toByteArray())
+                zip.closeEntry()
+                zip.putNextEntry(ZipEntry("locked/child.txt"))
+                zip.write("child".toByteArray())
+                zip.closeEntry()
+            }
+            try {
+                WorkspaceArchiveBrowser.list(root, "broken.zip")
+                fail("A file entry must not also be a parent folder.")
+            } catch (expected: java.io.IOException) {
+                assertTrue(expected.message.orEmpty().contains("conflicts", ignoreCase = true))
+            }
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
     @Test
     fun unsafeEntryNamesAreRejectedAndExistingArchiveIsNotDamaged() {
         val root = Files.createTempDirectory("check-unsafe-zip").toFile()
