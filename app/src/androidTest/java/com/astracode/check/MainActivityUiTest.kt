@@ -152,7 +152,51 @@ class MainActivityUiTest {
         composeRule.waitUntil(timeoutMillis = 5_000) {
             File(externalRoot, "app/src/.env").readText() == "TOKEN=edited-in-app"
         }
+
         assertEquals("TOKEN=edited-in-app", File(externalRoot, "app/src/.env").readText())
+
+        composeRule.onNodeWithTag("workspace-editor-back").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-.env").assertIsDisplayed() }.isSuccess
+        }
+
+        composeRule.onNodeWithTag("workspace-entry-.env").performTouchInput { longClick() }
+        composeRule.onNodeWithTag("workspace-action-rename").performClick()
+        composeRule.onNodeWithTag("workspace-operation-input").performTextReplacement(".env.renamed")
+        composeRule.onNodeWithTag("confirm-workspace-operation").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            File(workspaceRoot, "app/src/.env.renamed").exists() &&
+                File(externalRoot, "app/src/.env.renamed").exists() &&
+                !File(externalRoot, "app/src/.env").exists()
+        }
+
+        composeRule.onNodeWithTag("workspace-entry-.env.renamed").performTouchInput { longClick() }
+        composeRule.onNodeWithTag("workspace-action-copy").performClick()
+        composeRule.onNodeWithTag("workspace-operation-input").performTextReplacement("copy.env")
+        composeRule.onNodeWithTag("confirm-workspace-operation").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) { File(workspaceRoot, "app/src/copy.env").exists() }
+        assertEquals("TOKEN=edited-in-app", File(workspaceRoot, "app/src/copy.env").readText())
+
+        composeRule.onNodeWithTag("workspace-entry-.env.renamed").performTouchInput { longClick() }
+        composeRule.onNodeWithTag("workspace-action-move").performClick()
+        composeRule.onNodeWithTag("workspace-operation-input").performTextReplacement("app/moved.env")
+        composeRule.onNodeWithTag("confirm-workspace-operation").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            File(workspaceRoot, "app/moved.env").exists() &&
+                File(externalRoot, "app/moved.env").exists() &&
+                !File(externalRoot, "app/src/.env.renamed").exists()
+        }
+
+        composeRule.onNodeWithTag("workspace-go-up").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-moved.env").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-entry-moved.env").performTouchInput { longClick() }
+        composeRule.onNodeWithTag("workspace-action-delete").performClick()
+        composeRule.onNodeWithTag("confirm-workspace-delete").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            !File(workspaceRoot, "app/moved.env").exists() && !File(externalRoot, "app/moved.env").exists()
+        }
     }
 
 }
