@@ -173,8 +173,13 @@ internal object WorkspaceArchiveBrowser {
                 added.any { it !== record && it.path == record.path })
                 throw IOException("Nested ZIP conflicts with an existing path: " + record.path)
         }
-        added.forEach { ensureParents(existing, it.path) }
-        existing += added
+        added.forEach { record ->
+            ensureParents(existing, record.path)
+            if (existing.any { it.path == record.path }) {
+                throw IOException("Nested ZIP path already exists: " + record.path)
+            }
+            existing += record
+        }
         save(root, archivePath, existing)
     }
 
