@@ -208,7 +208,7 @@ internal fun WorkspaceBrowserPanel(
                     modifier = Modifier.testTag("workspace-bulk-move"),
                 ) { Text("Move") }
                 TextButton(
-                    onClick = { bulkActionKind = "copy"; bulkInput = currentDirectory },
+                    onClick = { bulkActionKind = "copy"; bulkInput = if (currentDirectory.isEmpty()) "copies" else currentDirectory + "/copies" },
                     enabled = selectedPaths.isNotEmpty(),
                     modifier = Modifier.testTag("workspace-bulk-copy"),
                 ) { Text("Copy") }
