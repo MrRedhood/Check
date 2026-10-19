@@ -252,7 +252,150 @@ internal fun WorkspaceBrowserPanel(
                     TextButton(onClick = { openedFile = null }) { Text("Close file") }
                 }
             }
+
             if (message.isNotBlank()) Text(message, modifier = Modifier.testTag("workspace-message"))
+        } else if (openedArchiveEntry != null) {
+            Column(modifier = Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = { openedArchiveEntry = null; refreshKey++ }, modifier = Modifier.testTag("workspace-zip-editor-back")) {
+                        Icon(Icons.Filled.ArrowBack, contentDescription = null)
+                        Text("ZIP files")
+                    }
+                    Text(openedArchiveEntry!!.substringAfterLast("/"), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                if (archiveLoading) {
+                    Text("Opening ZIP entry…", modifier = Modifier.testTag("workspace-zip-editor-loading"))
+                } else {
+                    OutlinedTextField(
+                        value = archiveEditorText,
+                        onValueChange = { archiveEditorText = it },
+                        modifier = Modifier.fillMaxWidth().weight(1f).testTag("workspace-zip-editor-input"),
+                        label = { Text("File contents (saved back into ZIP)") },
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = {
+                                val zip = archivePath ?: return@Button
+                                val item = openedArchiveEntry ?: return@Button
+                                val text = archiveEditorText
+                                scope.launch {
+                                    runCatching {
+                                        withContext(Dispatchers.IO) {
+                                            WorkspaceArchiveBrowser.write(root, zip, item, text.toByteArray(Charsets.UTF_8))
+                                            syncLinkedWorkspacePaths(root, externalRoot, syncedPaths, zip)
+                                        }
+                                    }.onSuccess {
+                                        archiveSavedText = text
+                                        refreshKey++
+                                        message = "Saved " + item.substringAfterLast("/")
+                                    }.onFailure { error -> message = error.message ?: "Could not save ZIP entry." }
+                                }
+                            },
+                            enabled = !archiveLoading && archiveEditorText != archiveSavedText,
+                            modifier = Modifier.testTag("workspace-zip-save-file"),
+                        ) { Text("Save to ZIP") }
+                        TextButton(onClick = { openedArchiveEntry = null; refreshKey++ }) { Text("Close file") }
+                    }
+                }
+                if (message.isNotBlank()) Text(message, modifier = Modifier.testTag("workspace-message"))
+            }
+        } else if (archivePath != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(
+                    onClick = {
+                        if (archiveDirectory.isNotEmpty()) {
+                            archiveDirectory = archiveDirectory.substringBeforeLast("/", "")
+                        } else {
+                            archivePath = null
+                            selectedPaths = emptySet()
+                            selectionMode = false
+                        }
+                        refreshKey++
+                    },
+                    modifier = Modifier.testTag("workspace-zip-up"),
+                ) {
+                    Icon(Icons.Filled.ArrowBack, contentDescription = null)
+                    Text(if (archiveDirectory.isEmpty()) "Files" else "Up")
+                }
+                Text(
+                    (archiveDirectory.substringAfterLast("/").ifEmpty { "ZIP root" }) +
+                        " · " + archiveEntries.size + if (archiveEntries.size == 1) " item" else " items",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.testTag("workspace-zip-current-folder-count"),
+                )
+            }
+            if (selectionMode) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(selectedPaths.size.toString() + " selected", modifier = Modifier.weight(1f))
+                    TextButton(
+                        onClick = {
+                            archiveOperationKind = "zip"
+                            archiveOperationEntry = archiveEntries.firstOrNull { it.path in selectedPaths }
+                            archiveOperationInput = if (archiveDirectory.isEmpty()) "archive.zip" else archiveDirectory + "/archive.zip"
+                        },
+                        enabled = selectedPaths.isNotEmpty(),
+                        modifier = Modifier.testTag("workspace-zip-bulk-create"),
+                    ) { Text("Create ZIP") }
+                    TextButton(
+                        onClick = {
+                            archiveOperationKind = "delete-selected"
+                            archiveOperationEntry = archiveEntries.firstOrNull { it.path in selectedPaths }
+                        },
+                        enabled = selectedPaths.isNotEmpty(),
+                        modifier = Modifier.testTag("workspace-zip-bulk-delete"),
+                    ) { Text("Delete") }
+                }
+            }
+            if (message.isNotBlank()) Text(message, modifier = Modifier.testTag("workspace-message"))
+            if (archiveEntries.isEmpty() && message.isBlank()) Text("This ZIP folder is empty.", modifier = Modifier.testTag("workspace-zip-empty-folder"))
+            LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                items(archiveEntries, key = { it.path }) { item ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth()
+                            .combinedClickable(
+                                onClick = {
+                                    if (selectionMode) {
+                                        selectedPaths = if (item.path in selectedPaths) selectedPaths - item.path else selectedPaths + item.path
+                                    } else if (item.isDirectory) {
+                                        archiveDirectory = item.path
+                                        refreshKey++
+                                    } else {
+                                        openedArchiveEntry = item.path
+                                    }
+                                },
+                                onLongClick = {
+                                    if (selectionMode) {
+                                        selectedPaths = if (item.path in selectedPaths) selectedPaths - item.path else selectedPaths + item.path
+                                    } else archiveActionEntry = item
+                                },
+                            )
+                            .padding(horizontal = 6.dp, vertical = 8.dp)
+                            .testTag("workspace-zip-entry-" + item.name),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (selectionMode) {
+                            Checkbox(
+                                checked = item.path in selectedPaths,
+                                onCheckedChange = { checked ->
+                                    selectedPaths = if (checked) selectedPaths + item.path else selectedPaths - item.path
+                                },
+                                modifier = Modifier.testTag("workspace-zip-select-" + item.name),
+                            )
+                        }
+                        Icon(if (item.isDirectory) Icons.Filled.Folder else Icons.Filled.Description, contentDescription = null)
+                        Spacer(Modifier.padding(4.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(item.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                (if (item.isDirectory) "Folder · " else item.format + " · ") + item.sizeBytes.toString() + " bytes",
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.testTag("workspace-zip-detail-" + item.name),
+                            )
+                        }
+                    }
+                    Divider()
+                }
+            }
         } else {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (currentDirectory.isNotEmpty()) {
