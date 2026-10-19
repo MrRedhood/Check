@@ -20,6 +20,10 @@ class MainActivityUiTest {
         composeRule.onNodeWithText(
             "Files stay here until you remove them. Removing a bookmark only removes AstraCode's access; it does not delete the original file.",
         ).assertIsDisplayed()
+        composeRule.onNodeWithText(
+            "Removing a bookmark only removes AstraCode's access; it does not delete the original file.",
+            substring = true,
+        ).assertIsDisplayed()
     }
 
     @Test
