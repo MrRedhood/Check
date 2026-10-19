@@ -478,7 +478,8 @@ private fun updateSyncedPathsAfterMove(
     }
     val result = saveSyncedPaths(context, root, updated)
     result.forEach { linkedPath ->
-        if (newPath == linkedPath || newPath.startsWith(linkedPath + "/")) {
+        if (newPath == linkedPath || newPath.startsWith(linkedPath + "/") ||
+            oldPath.startsWith(linkedPath + "/")) {
             if (resolveWorkspacePath(root, linkedPath).exists()) mirrorWorkspaceEntry(root, externalRoot, linkedPath, linkedPath)
         }
     }
