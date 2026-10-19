@@ -954,7 +954,7 @@ private fun workspaceMetadataText(root: File, relativePath: String): String {
     val format = if (isDirectory) "Folder" else
         file.name.substringAfterLast('.', "").takeIf { it.isNotBlank() }?.uppercase() ?: "Unknown"
     return "Name: " + file.name +
-        "\nType: " + if (isDirectory) "Folder" else "File" +
+        "\nType: " + (if (isDirectory) "Folder" else "File") +
         "\nSize: " + size + " bytes" +
         "\nCreated: " + attributes.creationTime().toInstant().toString() +
         "\nModified: " + attributes.lastModifiedTime().toInstant().toString() +
@@ -965,7 +965,7 @@ private fun workspaceMetadataText(root: File, relativePath: String): String {
 private fun workspaceArchiveMetadataText(root: File, archivePath: String, entryPath: String): String {
     val item = WorkspaceArchiveBrowser.metadata(root, archivePath, entryPath)
     return "Name: " + item.name +
-        "\nType: " + if (item.isDirectory) "Folder" else "File" +
+        "\nType: " + (if (item.isDirectory) "Folder" else "File") +
         "\nSize: " + item.sizeBytes + " bytes" +
         "\nCreated: Not recorded by this ZIP entry" +
         "\nModified: " + (item.modifiedAtMillis?.let { java.time.Instant.ofEpochMilli(it).toString() } ?: "Not recorded") +
