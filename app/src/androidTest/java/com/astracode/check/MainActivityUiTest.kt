@@ -8,6 +8,8 @@ import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.longClick
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
 import org.junit.After
@@ -27,6 +29,11 @@ class MainActivityUiTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         workspaceRoot = File(context.filesDir, "workspace")
         workspaceRoot.deleteRecursively()
+        File(context.filesDir, "external-workspace").deleteRecursively()
+        context.getSharedPreferences("check_workspace_sync", android.content.Context.MODE_PRIVATE)
+            .edit().clear().commit()
+        File(context.filesDir, "external-workspace/app/src").mkdirs()
+        File(context.filesDir, "external-workspace/app/src/.env").writeText("TOKEN=external-original")
         File(workspaceRoot, "app/src").mkdirs()
         File(workspaceRoot, "empty").mkdirs()
         File(workspaceRoot, ".gitignore").writeText("build/\n")
@@ -39,6 +46,8 @@ class MainActivityUiTest {
     @After
     fun cleanWorkspaceFixture() {
         if (::workspaceRoot.isInitialized) workspaceRoot.deleteRecursively()
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        File(context.filesDir, "external-workspace").deleteRecursively()
     }
 
     @Test
@@ -98,4 +107,52 @@ class MainActivityUiTest {
         }
         assertEquals("TOKEN=updated", File(workspaceRoot, "app/src/.env").readText())
     }
+
+    @Test
+    fun longPressShowsFileOperationsAndBothSyncDirections() {
+        val externalRoot = File(InstrumentationRegistry.getInstrumentation().targetContext.filesDir, "external-workspace")
+        composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-app").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-entry-app").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-src").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-entry-src").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-.env").assertIsDisplayed() }.isSuccess
+        }
+
+        composeRule.onNodeWithTag("workspace-entry-.env").performTouchInput { longClick() }
+        composeRule.onNodeWithTag("workspace-action-sync").assertIsDisplayed()
+        composeRule.onNodeWithTag("workspace-action-delete").assertIsDisplayed()
+        composeRule.onNodeWithTag("workspace-action-rename").assertIsDisplayed()
+        composeRule.onNodeWithTag("workspace-action-copy").assertIsDisplayed()
+        composeRule.onNodeWithTag("workspace-action-move").assertIsDisplayed()
+        composeRule.onNodeWithTag("workspace-action-sync").performClick()
+        composeRule.onNodeWithTag("sync-app-to-external").assertIsDisplayed()
+        composeRule.onNodeWithTag("sync-external-to-app").assertIsDisplayed()
+        composeRule.onNodeWithTag("sync-app-to-external").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            File(externalRoot, "app/src/.env").takeIf { it.exists() }?.readText() == "TOKEN=original"
+        }
+
+        File(externalRoot, "app/src/.env").writeText("TOKEN=external-updated")
+        composeRule.onNodeWithTag("workspace-entry-.env").performTouchInput { longClick() }
+        composeRule.onNodeWithTag("workspace-action-sync").performClick()
+        composeRule.onNodeWithTag("sync-external-to-app").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            File(workspaceRoot, "app/src/.env").readText() == "TOKEN=external-updated"
+        }
+
+        composeRule.onNodeWithTag("workspace-entry-.env").performClick()
+        composeRule.onNodeWithTag("workspace-editor-input").performTextReplacement("TOKEN=edited-in-app")
+        composeRule.onNodeWithTag("workspace-save-file").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            File(externalRoot, "app/src/.env").readText() == "TOKEN=edited-in-app"
+        }
+        assertEquals("TOKEN=edited-in-app", File(externalRoot, "app/src/.env").readText())
+    }
+
 }
