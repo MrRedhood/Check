@@ -188,16 +188,19 @@ internal object WorkspaceArchiveBrowser {
         }
         if (added.isEmpty()) throw IOException("Nested ZIP is empty.")
         val existing = readRecords(root, archivePath).toMutableList()
-        added.forEach { record ->
-            if (existing.any { it.path == record.path || it.path.startsWith(record.path + "/") ||
-                    (record.directory && record.path.startsWith(it.path + "/") && !it.directory) } ||
-                added.any { it !== record && it.path == record.path })
-                throw IOException("Nested ZIP conflicts with an existing path: " + record.path)
+        if (allRecords(existing).any { it.path == destination || it.path.startsWith(destination + "/") }) {
+            throw IOException("Nested ZIP destination already exists: " + destination)
         }
-        added.forEach { record ->
+        if (added.map { it.path }.distinct().size != added.size) {
+            throw IOException("Nested ZIP contains a duplicate destination path.")
+        }
+        added.sortedBy { it.path.count { ch -> ch == '/' } }.forEach { record ->
             ensureParents(existing, record.path)
             if (existing.any { it.path == record.path }) {
                 throw IOException("Nested ZIP path already exists: " + record.path)
+            }
+            if (!record.directory && existing.any { it.path.startsWith(record.path + "/") }) {
+                throw IOException("A file cannot replace a ZIP folder: " + record.path)
             }
             existing += record
         }
