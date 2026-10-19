@@ -642,7 +642,7 @@ internal fun WorkspaceBrowserPanel(
             onDismissRequest = { metadataDetails = null },
             title = { Text("File metadata") },
             text = { Text(details, modifier = Modifier.testTag("workspace-metadata-details")) },
-            confirmButton = { TextButton(onClick = { metadataDetails = null }) { Text("Close") } },
+            confirmButton = { TextButton(onClick = { metadataDetails = null }, modifier = Modifier.testTag("workspace-metadata-close")) { Text("Close") } },
         )
     }
 
