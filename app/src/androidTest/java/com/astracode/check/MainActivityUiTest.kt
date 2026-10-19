@@ -280,7 +280,7 @@ class MainActivityUiTest {
         composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Modified:")
         composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Format: ZIP")
         composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Storage path:")
-        composeRule.onNodeWithText("Close").performClick()
+        composeRule.onNodeWithTag("workspace-metadata-close").performClick()
 
         composeRule.onNodeWithTag("workspace-entry-project.zip").performTouchInput { longClick() }
         composeRule.onNodeWithTag("workspace-action-browse-zip").performClick()
