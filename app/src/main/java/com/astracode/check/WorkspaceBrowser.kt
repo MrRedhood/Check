@@ -261,11 +261,18 @@ internal fun WorkspaceBrowserPanel(
                             withContext(Dispatchers.IO) {
                                 val target = resolveWorkspacePath(root, entry.path)
                                 if (!target.deleteRecursively()) throw IOException("Could not delete " + entry.name)
-                                updateSyncedPathsAfterDelete(context, root, externalRoot, syncedPaths, entry.path).also { syncedPaths = it }
+                                updateSyncedPathsAfterDelete(context, root, externalRoot, syncedPaths, entry.path)
                             }
                         }
-                        result.onSuccess { pendingDeleteEntry = null; refreshKey++; message = "Deleted " + entry.name }
-                            .onFailure { error -> pendingDeleteEntry = null; message = error.message ?: "Could not delete item." }
+                        result.onSuccess { updatedLinks ->
+                            syncedPaths = updatedLinks
+                            pendingDeleteEntry = null
+                            refreshKey++
+                            message = "Deleted " + entry.name
+                        }.onFailure { error ->
+                            pendingDeleteEntry = null
+                            message = error.message ?: "Could not delete item."
+                        }
                     }
                 }, modifier = Modifier.testTag("confirm-workspace-delete")) { Text("Delete") }
             },
