@@ -1,5 +1,7 @@
 package com.astracode.check
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -13,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
@@ -29,6 +32,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -66,6 +70,15 @@ internal fun WorkspaceBrowserPanel(
     var savedText by remember(root) { mutableStateOf("") }
     var loading by remember(root) { mutableStateOf(false) }
     var message by remember(root) { mutableStateOf("") }
+    var actionEntry by remember(root) { mutableStateOf<WorkspaceEntry?>(null) }
+    var pendingDeleteEntry by remember(root) { mutableStateOf<WorkspaceEntry?>(null) }
+    var operationEntry by remember(root) { mutableStateOf<WorkspaceEntry?>(null) }
+    var operationKind by remember(root) { mutableStateOf<String?>(null) }
+    var operationInput by remember(root) { mutableStateOf("") }
+    var syncEntry by remember(root) { mutableStateOf<WorkspaceEntry?>(null) }
+    val context = LocalContext.current
+    val externalRoot = remember(root) { File(root.parentFile, "external-workspace") }
+    var syncedPaths by remember(root) { mutableStateOf(loadSyncedPaths(context, root)) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(root, currentDirectory, refreshKey) {
@@ -138,6 +151,7 @@ internal fun WorkspaceBrowserPanel(
                                 runCatching { withContext(Dispatchers.IO) { writeWorkspaceText(root, path, editorText) } }
                                     .onSuccess {
                                         savedText = editorText
+                                        syncLinkedWorkspacePaths(root, externalRoot, syncedPaths, path)
                                         refreshKey++
                                         message = "Saved " + path.substringAfterLast('/')
                                     }
@@ -178,14 +192,15 @@ internal fun WorkspaceBrowserPanel(
                 items(entries, key = { it.path }) { entry ->
                     Row(
                         modifier = Modifier.fillMaxWidth()
-                            .clickable {
-                                if (entry.isDirectory) {
-                                    currentDirectory = entry.path
-                                    refreshKey++
-                                } else {
-                                    openedFile = entry.path
-                                }
-                            }
+                            .combinedClickable(
+                                onClick = {
+                                    if (entry.isDirectory) {
+                                        currentDirectory = entry.path
+                                        refreshKey++
+                                    } else openedFile = entry.path
+                                },
+                                onLongClick = { actionEntry = entry },
+                            )
                             .padding(horizontal = 6.dp, vertical = 8.dp)
                             .testTag("workspace-entry-" + entry.name),
                         verticalAlignment = Alignment.CenterVertically,
@@ -215,6 +230,251 @@ internal fun WorkspaceBrowserPanel(
             }
         }
     }
+
+    actionEntry?.let { entry ->
+        AlertDialog(onDismissRequest = { actionEntry = null },
+            title = { Text(entry.name + " options") },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                TextButton(onClick = { syncEntry = entry; actionEntry = null },
+                    modifier = Modifier.fillMaxWidth().testTag("workspace-action-sync")) { Text("Sync") }
+                TextButton(onClick = { operationEntry = entry; operationKind = "rename"; operationInput = entry.name; actionEntry = null },
+                    modifier = Modifier.fillMaxWidth().testTag("workspace-action-rename")) { Text("Rename") }
+                TextButton(onClick = { operationEntry = entry; operationKind = "copy"; operationInput = "copy-" + entry.name; actionEntry = null },
+                    modifier = Modifier.fillMaxWidth().testTag("workspace-action-copy")) { Text("Copy") }
+                TextButton(onClick = { operationEntry = entry; operationKind = "move"; operationInput = entry.path; actionEntry = null },
+                    modifier = Modifier.fillMaxWidth().testTag("workspace-action-move")) { Text("Move") }
+                TextButton(onClick = { pendingDeleteEntry = entry; actionEntry = null },
+                    modifier = Modifier.fillMaxWidth().testTag("workspace-action-delete")) { Text("Delete") }
+            } },
+            confirmButton = { TextButton(onClick = { actionEntry = null }) { Text("Cancel") } })
+    }
+
+    pendingDeleteEntry?.let { entry ->
+        AlertDialog(onDismissRequest = { pendingDeleteEntry = null },
+            title = { Text("Delete " + entry.name + "?") },
+            text = { Text("Delete this item and everything inside its folder, if it is a folder.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        val result = runCatching {
+                            withContext(Dispatchers.IO) {
+                                val target = resolveWorkspacePath(root, entry.path)
+                                if (!target.deleteRecursively()) throw IOException("Could not delete " + entry.name)
+                                updateSyncedPathsAfterDelete(context, root, externalRoot, syncedPaths, entry.path).also { syncedPaths = it }
+                            }
+                        }
+                        result.onSuccess { pendingDeleteEntry = null; refreshKey++; message = "Deleted " + entry.name }
+                            .onFailure { error -> pendingDeleteEntry = null; message = error.message ?: "Could not delete item." }
+                    }
+                }, modifier = Modifier.testTag("confirm-workspace-delete")) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { pendingDeleteEntry = null }) { Text("Cancel") } })
+    }
+
+    operationEntry?.let { entry ->
+        val kind = operationKind.orEmpty()
+        AlertDialog(onDismissRequest = { operationEntry = null; operationKind = null },
+            title = { Text(when (kind) {
+                "rename" -> "Rename " + entry.name
+                "copy" -> "Copy " + entry.name
+                else -> "Move " + entry.name
+            }) },
+            text = { Column {
+                Text(when (kind) {
+                    "rename" -> "Enter a new name for this item."
+                    "copy" -> "Enter the new name for the copy in this folder."
+                    else -> "Enter the destination path relative to the workspace root."
+                })
+                OutlinedTextField(value = operationInput, onValueChange = { operationInput = it },
+                    label = { Text(if (kind == "move") "Destination path" else "Name") },
+                    modifier = Modifier.fillMaxWidth().testTag("workspace-operation-input"))
+            } },
+            confirmButton = {
+                TextButton(onClick = {
+                    val raw = operationInput.trim()
+                    scope.launch {
+                        val result = runCatching {
+                            withContext(Dispatchers.IO) {
+                                val source = resolveWorkspacePath(root, entry.path)
+                                val destinationPath = if (kind == "move") raw else {
+                                    if (!isSimpleWorkspaceName(raw)) throw IOException("Enter a valid name without path separators.")
+                                    val parent = entry.path.substringBeforeLast('/', "")
+                                    if (parent.isEmpty()) raw else "$parent/$raw"
+                                }
+                                val destination = resolveWorkspacePath(root, destinationPath)
+                                if (destination == source) throw IOException("The source and destination are the same.")
+                                if (entry.isDirectory && destination.path.startsWith(source.path + File.separator))
+                                    throw IOException("A folder cannot be copied or moved into itself.")
+                                if (destination.exists()) throw IOException("The destination already exists.")
+                                destination.parentFile?.let { parent ->
+                                    if (!parent.exists() && !parent.mkdirs()) throw IOException("Could not create the destination folder.")
+                                    if (!parent.isDirectory) throw IOException("The destination parent is not a folder.")
+                                }
+                                when (kind) {
+                                    "rename", "move" -> {
+                                        try { Files.move(source.toPath(), destination.toPath(), StandardCopyOption.ATOMIC_MOVE) }
+                                        catch (_: java.nio.file.AtomicMoveNotSupportedException) { Files.move(source.toPath(), destination.toPath()) }
+                                        updateSyncedPathsAfterMove(context, root, externalRoot, syncedPaths, entry.path, destinationPath).also { syncedPaths = it }
+                                    }
+                                    "copy" -> copyWorkspaceEntry(root, entry.path, destinationPath)
+                                    else -> throw IOException("Unknown file action.")
+                                }
+                            }
+                        }
+                        result.onSuccess {
+                            operationEntry = null; operationKind = null; refreshKey++
+                            message = when (kind) { "rename" -> "Renamed " + entry.name; "copy" -> "Copied " + entry.name; else -> "Moved " + entry.name }
+                        }.onFailure { error -> message = error.message ?: "Could not complete the file action." }
+                    }
+                }, modifier = Modifier.testTag("confirm-workspace-operation")) {
+                    Text(when (kind) { "rename" -> "Rename"; "copy" -> "Copy"; else -> "Move" })
+                }
+            },
+            dismissButton = { TextButton(onClick = { operationEntry = null; operationKind = null }) { Text("Cancel") } })
+    }
+
+    syncEntry?.let { entry ->
+        AlertDialog(onDismissRequest = { syncEntry = null },
+            title = { Text("Sync " + entry.name) },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Choose which copy should replace the other. The link is remembered for later app-side edits.")
+                Button(onClick = {
+                    scope.launch {
+                        val result = runCatching {
+                            withContext(Dispatchers.IO) {
+                                mirrorWorkspaceEntry(root, externalRoot, entry.path, entry.path)
+                                saveSyncedPaths(context, root, syncedPaths + entry.path)
+                            }
+                        }
+                        result.onSuccess { syncedPaths = it; syncEntry = null; refreshKey++; message = "Synced app copy to external storage." }
+                            .onFailure { error -> message = error.message ?: "Could not sync to external storage." }
+                    }
+                }, modifier = Modifier.fillMaxWidth().testTag("sync-app-to-external")) { Text("App → external storage") }
+                Button(onClick = {
+                    scope.launch {
+                        val result = runCatching {
+                            withContext(Dispatchers.IO) {
+                                mirrorWorkspaceEntry(externalRoot, root, entry.path, entry.path)
+                                saveSyncedPaths(context, root, syncedPaths + entry.path)
+                            }
+                        }
+                        result.onSuccess { syncedPaths = it; syncEntry = null; refreshKey++; message = "Synced external storage to app copy." }
+                            .onFailure { error -> message = error.message ?: "Could not sync from external storage." }
+                    }
+                }, modifier = Modifier.fillMaxWidth().testTag("sync-external-to-app")) { Text("External storage → app") }
+            } },
+            confirmButton = { TextButton(onClick = { syncEntry = null }) { Text("Cancel") } })
+    }
+
+}
+
+
+private const val CHECK_SYNC_PREFS = "check_workspace_sync"
+private fun syncPreferencesKey(root: File): String = "links:" + root.canonicalPath
+private fun loadSyncedPaths(context: android.content.Context, root: File): Set<String> {
+    val json = context.getSharedPreferences(CHECK_SYNC_PREFS, android.content.Context.MODE_PRIVATE)
+        .getString(syncPreferencesKey(root), null) ?: return emptySet()
+    return runCatching {
+        val array = org.json.JSONArray(json)
+        (0 until array.length()).mapNotNull { array.optString(it).takeIf(String::isNotBlank) }.toSet()
+    }.getOrDefault(emptySet())
+}
+private fun saveSyncedPaths(context: android.content.Context, root: File, paths: Set<String>): Set<String> {
+    val normalized = paths.filter(String::isNotBlank).toSet()
+    val array = org.json.JSONArray()
+    normalized.sorted().forEach(array::put)
+    context.getSharedPreferences(CHECK_SYNC_PREFS, android.content.Context.MODE_PRIVATE)
+        .edit().putString(syncPreferencesKey(root), array.toString()).apply()
+    return normalized
+}
+private fun isSimpleWorkspaceName(value: String): Boolean =
+    value.isNotBlank() && value != "." && value != ".." && !value.contains('/') &&
+        !value.contains('\\') && value.indexOf('\u0000') < 0
+private fun copyWorkspaceEntry(root: File, sourcePath: String, targetPath: String) {
+    val source = resolveWorkspacePath(root, sourcePath)
+    val target = resolveWorkspacePath(root, targetPath)
+    if (!source.exists()) throw IOException("Source does not exist: " + sourcePath)
+    if (target.exists()) throw IOException("Destination already exists: " + targetPath)
+    copyTree(source, target, replace = false)
+}
+private fun copyTree(source: File, target: File, replace: Boolean) {
+    if (Files.isSymbolicLink(source.toPath())) throw SecurityException("Symbolic links cannot be copied.")
+    if (source.isDirectory) {
+        if (target.exists() && !target.isDirectory) {
+            if (!replace) throw IOException("Destination has a different item type.")
+            if (!target.delete()) throw IOException("Could not replace destination.")
+        }
+        if (!target.exists() && !target.mkdirs()) throw IOException("Could not create folder: " + target.name)
+        val sourceChildren = source.listFiles() ?: throw IOException("Cannot read folder: " + source.path)
+        val sourceNames = sourceChildren.map { it.name }.toSet()
+        if (replace) {
+            (target.listFiles() ?: emptyArray()).filterNot { it.name in sourceNames }.forEach {
+                if (!it.deleteRecursively()) throw IOException("Could not remove stale item: " + it.name)
+            }
+        }
+        sourceChildren.forEach { child -> copyTree(child, File(target, child.name), replace) }
+    } else {
+        if (target.exists() && target.isDirectory) {
+            if (!replace) throw IOException("Destination is a folder.")
+            if (!target.deleteRecursively()) throw IOException("Could not replace destination.")
+        }
+        target.parentFile?.let { if (!it.exists() && !it.mkdirs()) throw IOException("Could not create destination folder.") }
+        if (target.exists() && !replace) throw IOException("Destination already exists: " + target.path)
+        Files.copy(source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+    }
+}
+private fun mirrorWorkspaceEntry(sourceRoot: File, targetRoot: File, sourcePath: String, targetPath: String) {
+    val source = resolveWorkspacePath(sourceRoot, sourcePath)
+    val target = resolveWorkspacePath(targetRoot, targetPath)
+    if (!source.exists()) throw IOException("Source does not exist: " + sourcePath)
+    copyTree(source, target, replace = true)
+}
+private fun syncLinkedWorkspacePaths(root: File, externalRoot: File, links: Set<String>, changedPath: String) {
+    links.filter { changedPath == it || changedPath.startsWith(it + "/") }.forEach { linkedPath ->
+        val local = resolveWorkspacePath(root, linkedPath)
+        val external = resolveWorkspacePath(externalRoot, linkedPath)
+        if (local.exists()) mirrorWorkspaceEntry(root, externalRoot, linkedPath, linkedPath)
+        else if (external.exists() && !external.deleteRecursively()) throw IOException("Could not propagate deletion of " + linkedPath)
+    }
+}
+private fun updateSyncedPathsAfterDelete(
+    context: android.content.Context, root: File, externalRoot: File, links: Set<String>, deletedPath: String,
+): Set<String> {
+    val retained = linkedSetOf<String>()
+    links.forEach { linkedPath ->
+        when {
+            linkedPath == deletedPath || linkedPath.startsWith(deletedPath + "/") -> {
+                val remote = resolveWorkspacePath(externalRoot, linkedPath)
+                if (remote.exists() && !remote.deleteRecursively()) throw IOException("Could not delete synced item: " + linkedPath)
+            }
+            deletedPath.startsWith(linkedPath + "/") -> {
+                if (resolveWorkspacePath(root, linkedPath).exists()) mirrorWorkspaceEntry(root, externalRoot, linkedPath, linkedPath)
+                retained += linkedPath
+            }
+            else -> retained += linkedPath
+        }
+    }
+    return saveSyncedPaths(context, root, retained)
+}
+private fun updateSyncedPathsAfterMove(
+    context: android.content.Context, root: File, externalRoot: File, links: Set<String>, oldPath: String, newPath: String,
+): Set<String> {
+    val updated = linkedSetOf<String>()
+    links.forEach { linkedPath ->
+        if (linkedPath == oldPath || linkedPath.startsWith(oldPath + "/")) {
+            val newLinked = newPath + linkedPath.removePrefix(oldPath)
+            val oldRemote = resolveWorkspacePath(externalRoot, linkedPath)
+            if (oldRemote.exists() && !oldRemote.deleteRecursively()) throw IOException("Could not remove old synced path.")
+            updated += newLinked
+        } else updated += linkedPath
+    }
+    val result = saveSyncedPaths(context, root, updated)
+    result.forEach { linkedPath ->
+        if (newPath == linkedPath || newPath.startsWith(linkedPath + "/")) {
+            if (resolveWorkspacePath(root, linkedPath).exists()) mirrorWorkspaceEntry(root, externalRoot, linkedPath, linkedPath)
+        }
+    }
+    return result
 }
 
 private fun listWorkspaceDirectory(root: File, relativePath: String): List<WorkspaceEntry> {
