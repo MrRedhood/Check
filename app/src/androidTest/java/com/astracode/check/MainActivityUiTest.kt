@@ -84,7 +84,9 @@ class MainActivityUiTest {
             runCatching { composeRule.onNodeWithTag("workspace-entry-src").assertTextContains("2 items") }.isSuccess
         }
         composeRule.onNodeWithTag("workspace-entry-src").performClick()
-        composeRule.onNodeWithTag("workspace-entry-.env").assertIsDisplayed()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-.env").assertIsDisplayed() }.isSuccess
+        }
         composeRule.onNodeWithTag("workspace-entry-.env").assertTextContains("Hidden file · 14 bytes")
 
         composeRule.onNodeWithTag("workspace-entry-.env").performClick()
