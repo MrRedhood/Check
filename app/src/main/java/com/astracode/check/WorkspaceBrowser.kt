@@ -82,6 +82,18 @@ internal fun WorkspaceBrowserPanel(
     var selectedPaths by remember(root) { mutableStateOf(emptySet<String>()) }
     var bulkActionKind by remember(root) { mutableStateOf<String?>(null) }
     var bulkInput by remember(root) { mutableStateOf("") }
+    var archivePath by remember(root) { mutableStateOf<String?>(null) }
+    var archiveDirectory by remember(root) { mutableStateOf("") }
+    var archiveEntries by remember(root) { mutableStateOf(emptyList<WorkspaceArchiveBrowser.Entry>()) }
+    var openedArchiveEntry by remember(root) { mutableStateOf<String?>(null) }
+    var archiveEditorText by remember(root) { mutableStateOf("") }
+    var archiveSavedText by remember(root) { mutableStateOf("") }
+    var archiveLoading by remember(root) { mutableStateOf(false) }
+    var archiveActionEntry by remember(root) { mutableStateOf<WorkspaceArchiveBrowser.Entry?>(null) }
+    var archiveOperationEntry by remember(root) { mutableStateOf<WorkspaceArchiveBrowser.Entry?>(null) }
+    var archiveOperationKind by remember(root) { mutableStateOf<String?>(null) }
+    var archiveOperationInput by remember(root) { mutableStateOf("") }
+    var metadataDetails by remember(root) { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val externalRoot = remember(root) { File(root.parentFile, "external-workspace") }
     var syncedPaths by remember(root) { mutableStateOf(loadSyncedPaths(context, root)) }
@@ -127,10 +139,51 @@ internal fun WorkspaceBrowserPanel(
         }
     }
 
+
+    LaunchedEffect(root, archivePath, archiveDirectory, refreshKey) {
+        val selectedArchive = archivePath
+        if (selectedArchive == null) {
+            archiveEntries = emptyList()
+            return@LaunchedEffect
+        }
+        try {
+            archiveEntries = withContext(Dispatchers.IO) {
+                WorkspaceArchiveBrowser.list(root, selectedArchive, archiveDirectory)
+            }
+        } catch (error: Exception) {
+            archiveEntries = emptyList()
+            message = error.message ?: "Could not read ZIP folder."
+        }
+    }
+
+    LaunchedEffect(root, archivePath, openedArchiveEntry) {
+        val selectedArchive = archivePath
+        val selectedEntry = openedArchiveEntry
+        if (selectedArchive == null || selectedEntry == null) {
+            archiveEditorText = ""
+            archiveSavedText = ""
+            archiveLoading = false
+            return@LaunchedEffect
+        }
+        archiveLoading = true
+        try {
+            val text = withContext(Dispatchers.IO) {
+                readWorkspaceArchiveText(root, selectedArchive, selectedEntry)
+            }
+            archiveEditorText = text
+            archiveSavedText = text
+        } catch (error: Exception) {
+            message = error.message ?: "Could not open ZIP entry."
+            openedArchiveEntry = null
+        } finally {
+            archiveLoading = false
+        }
+    }
+
     Column(modifier = modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Workspace files", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            if (openedFile == null) {
+            Text(if (archivePath == null) "Workspace files" else "ZIP: " + archivePath!!.substringAfterLast("/"), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            if (openedFile == null && openedArchiveEntry == null) {
                 TextButton(
                     onClick = {
                         selectionMode = !selectionMode
@@ -141,7 +194,7 @@ internal fun WorkspaceBrowserPanel(
             }
             TextButton(onClick = onClose, modifier = Modifier.testTag("close-workspace-browser")) { Text("Close") }
         }
-        if (selectionMode && openedFile == null) {
+        if (selectionMode && openedFile == null && openedArchiveEntry == null && archivePath == null) {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("${selectedPaths.size} selected", modifier = Modifier.weight(1f))
                 TextButton(
@@ -234,6 +287,11 @@ internal fun WorkspaceBrowserPanel(
                                             else selectedPaths + entry.path
                                     } else if (entry.isDirectory) {
                                         currentDirectory = entry.path
+                                        refreshKey++
+                                    } else if (entry.name.endsWith(".zip", ignoreCase = true)) {
+                                        archivePath = entry.path
+                                        archiveDirectory = ""
+                                        openedArchiveEntry = null
                                         refreshKey++
                                     } else openedFile = entry.path
                                 },
