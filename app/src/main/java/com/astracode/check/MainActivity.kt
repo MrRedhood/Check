@@ -49,6 +49,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.io.File
 
 private const val PREFS_NAME = "file_access_check"
 private const val SAVED_URIS_KEY = "saved_document_uris"
@@ -78,6 +79,7 @@ class MainActivity : ComponentActivity() {
             var savedText by remember { mutableStateOf("") }
             var loading by remember { mutableStateOf(initialActive != null) }
             var showSavedFiles by remember { mutableStateOf(false) }
+            var showWorkspaceBrowser by remember { mutableStateOf(false) }
             var message by remember { mutableStateOf("") }
             val scope = rememberCoroutineScope()
 
@@ -177,7 +179,20 @@ class MainActivity : ComponentActivity() {
                                 Spacer(Modifier.padding(3.dp))
                                 Text("Saved files")
                             }
+                            IconButton(
+                                onClick = { showWorkspaceBrowser = true },
+                                modifier = Modifier.testTag("open-workspace-browser-button"),
+                            ) {
+                                Icon(Icons.Filled.Folder, contentDescription = "Workspace files")
+                            }
                         }
+                        if (showWorkspaceBrowser) {
+                            WorkspaceBrowserPanel(
+                                root = File(filesDir, "workspace"),
+                                modifier = Modifier.weight(1f).fillMaxWidth(),
+                                onClose = { showWorkspaceBrowser = false },
+                            )
+                        } else {
                         if (message.isNotBlank()) {
                             Text(message, modifier = Modifier.testTag("file-status-message"))
                         }
@@ -219,6 +234,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             }
+                        }
                         }
                     }
                 }
