@@ -171,6 +171,9 @@ class MainActivityUiTest {
                 !File(externalRoot, "app/src/.env").exists()
         }
 
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-.env.renamed").assertIsDisplayed() }.isSuccess
+        }
         composeRule.onNodeWithTag("workspace-entry-.env.renamed").performTouchInput { longClick() }
         composeRule.onNodeWithTag("workspace-action-copy").performClick()
         composeRule.onNodeWithTag("workspace-operation-input").performTextReplacement("copy.env")
@@ -235,6 +238,9 @@ class MainActivityUiTest {
                 File(externalRoot, "app/bundle.zip").isFile
         }
 
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-bundle.zip").assertIsDisplayed() }.isSuccess
+        }
         composeRule.onNodeWithTag("workspace-entry-bundle.zip").performTouchInput { longClick() }
         composeRule.onNodeWithTag("workspace-action-extract").performClick()
         composeRule.onNodeWithTag("workspace-operation-input").performTextReplacement("app/restored")
