@@ -64,6 +64,14 @@ internal object WorkspaceRecovery {
         "py", "js", "mjs", "ts", "tsx", "jsx", "html", "css", "yaml", "yml", "toml",
         "properties", "gradle", "csv", "md", "ini", "conf", "sql", "rs", "go", "swift",
     )
+    private val imageMimeTypes = mapOf(
+        "png" to "image/png",
+        "jpg" to "image/jpeg",
+        "jpeg" to "image/jpeg",
+        "webp" to "image/webp",
+        "gif" to "image/gif",
+        "bmp" to "image/bmp",
+    )
 
     fun resolve(root: File, relativePath: String, allowRoot: Boolean = false): File {
         val canonicalRoot = root.canonicalFile
