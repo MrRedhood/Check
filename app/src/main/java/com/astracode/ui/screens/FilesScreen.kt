@@ -53,6 +53,7 @@ import com.astracode.ui.models.AtelierFileItem
 
 @Composable
 fun FilesScreen(
+    modifier: Modifier = Modifier,
     rootName: String,
     currentDirectory: String,
     storageLabel: String,
@@ -76,7 +77,7 @@ fun FilesScreen(
     onGoUp: () -> Unit,
 ) {
     Column(
-        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+        modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 14.dp, bottom = 12.dp),
