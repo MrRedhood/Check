@@ -323,11 +323,13 @@ class MainActivityUiTest {
         composeRule.onNodeWithTag("workspace-safety-tools").performClick()
         composeRule.onNodeWithTag("workspace-safety-search-input").performTextReplacement("Main.kt")
         composeRule.onNodeWithTag("workspace-safety-search").performClick()
-        waitForUiStage("search results") {
+        waitForUiStage("search result message appears") {
             runCatching {
-                composeRule.onNodeWithTag("workspace-safety-results").assertTextContains("app/src/Main.kt")
+                composeRule.onNodeWithTag("workspace-safety-results").assertIsDisplayed()
             }.isSuccess
         }
+        // Keep this assertion outside waitUntil so CI logs reveal the actual result text on failure.
+        composeRule.onNodeWithTag("workspace-safety-results").assertTextContains("app/src/Main.kt")
 
         composeRule.onNodeWithTag("workspace-batch-rename-input")
             .performTextReplacement("README.txt=README-renamed.txt")
