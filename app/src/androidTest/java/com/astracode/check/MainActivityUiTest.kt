@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.longClick
 import androidx.test.platform.app.InstrumentationRegistry
@@ -15,6 +16,7 @@ import java.io.File
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -329,7 +331,12 @@ class MainActivityUiTest {
             }.isSuccess
         }
         // Keep this assertion outside waitUntil so CI logs reveal the actual result text on failure.
-        composeRule.onNodeWithTag("workspace-safety-results").assertTextContains("app/src/Main.kt")
+        val searchResultText = composeRule.onNodeWithTag("workspace-safety-results")
+            .fetchSemanticsNode().config[SemanticsProperties.Text].joinToString("") { it.text }
+        assertTrue(
+            "Search should find the fixture file; actual result was: $searchResultText",
+            searchResultText.contains("app/src/Main.kt"),
+        )
 
         composeRule.onNodeWithTag("workspace-batch-rename-input")
             .performTextReplacement("README.txt=README-renamed.txt")
