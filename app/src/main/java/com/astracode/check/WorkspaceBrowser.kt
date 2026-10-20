@@ -772,6 +772,16 @@ internal fun WorkspaceBrowserPanel(
             onDismissRequest = { archiveActionEntry = null },
             title = { Text(item.name + " options inside ZIP") },
             text = {
+                val renameReview = pendingRenamePreview
+                if (renameReview != null) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 350.dp).verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text("Review every proposed change before applying it:")
+                        renameReview.forEach { (old, new) -> Text("$old  →  $new") }
+                    }
+                } else {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     TextButton(onClick = {
                         scope.launch {
@@ -906,8 +916,17 @@ internal fun WorkspaceBrowserPanel(
 
     if (showSafetyTools) {
         AlertDialog(
-            onDismissRequest = { showSafetyTools = false },
-            title = { Text("File safety tools") },
+            onDismissRequest = {
+                if (pendingRenamePreview != null) {
+                    pendingRenamePreview = null
+                    safetyResults = "Rename cancelled. No files were changed."
+                } else {
+                    showSafetyTools = false
+                }
+            },
+            title = {
+                Text(if (pendingRenamePreview != null) "Review batch rename" else "File safety tools")
+            },
             text = {
                 Column(
                     modifier = Modifier.fillMaxWidth().heightIn(max = 500.dp).verticalScroll(rememberScrollState()),
@@ -1060,7 +1079,6 @@ internal fun WorkspaceBrowserPanel(
                                 else -> {
                                     pendingRenamePreview = proposed
                                     safetyResults = "Review the proposed changes below. No files have been renamed yet."
-                                    showSafetyTools = false
                                 }
                             }
                         },
@@ -1122,69 +1140,50 @@ internal fun WorkspaceBrowserPanel(
                         }
                     }
                 }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = { showSafetyTools = false },
-                    modifier = Modifier.testTag("workspace-safety-close"),
-                ) { Text("Close") }
-            },
-        )
-    }
-
-    pendingRenamePreview?.let { proposed ->
-        AlertDialog(
-            onDismissRequest = {
-                pendingRenamePreview = null
-                safetyResults = "Rename cancelled. No files were changed."
-                showSafetyTools = true
-            },
-            title = { Text("Review batch rename") },
-            text = {
-                Column(
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 350.dp).verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Text("Review every proposed change before applying it:")
-                    proposed.forEach { (old, new) -> Text("${old}  →  ${new}") }
                 }
             },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        val reviewed = proposed.toMap()
-                        scope.launch {
-                            runCatching {
-                                withContext(Dispatchers.IO) {
-                                    WorkspaceRecovery.batchRename(root, currentDirectory, reviewed)
+                if (pendingRenamePreview != null) {
+                    TextButton(
+                        onClick = {
+                            val reviewed = pendingRenamePreview?.toMap() ?: emptyMap()
+                            scope.launch {
+                                runCatching {
+                                    withContext(Dispatchers.IO) {
+                                        WorkspaceRecovery.batchRename(root, currentDirectory, reviewed)
+                                    }
+                                }.onSuccess { results ->
+                                    pendingRenamePreview = null
+                                    safetyRenameDraft = ""
+                                    refreshKey++
+                                    safetyResults = "Renamed ${results.size} item(s):\n" +
+                                        results.joinToString("\n") { "${it.from} → ${it.to}" }
+                                }.onFailure { error ->
+                                    pendingRenamePreview = null
+                                    safetyResults = "Batch rename failed before any unsafe overwrite: " +
+                                        (error.message ?: "unknown error")
                                 }
-                            }.onSuccess { results ->
-                                pendingRenamePreview = null
-                                safetyRenameDraft = ""
-                                showSafetyTools = true
-                                refreshKey++
-                                safetyResults = "Renamed ${results.size} item(s):\n" +
-                                    results.joinToString("\n") { "${it.from} → ${it.to}" }
-                            }.onFailure { error ->
-                                pendingRenamePreview = null
-                                showSafetyTools = true
-                                safetyResults = "Batch rename failed before any unsafe overwrite: " +
-                                    (error.message ?: "unknown error")
                             }
-                        }
-                    },
-                    modifier = Modifier.testTag("workspace-batch-rename-confirm"),
-                ) { Text("Confirm rename") }
+                        },
+                        modifier = Modifier.testTag("workspace-batch-rename-confirm"),
+                    ) { Text("Confirm rename") }
+                } else {
+                    TextButton(
+                        onClick = { showSafetyTools = false },
+                        modifier = Modifier.testTag("workspace-safety-close"),
+                    ) { Text("Close") }
+                }
             },
             dismissButton = {
-                TextButton(
-                    onClick = {
-                        pendingRenamePreview = null
-                        safetyResults = "Rename cancelled. No files were changed."
-                        showSafetyTools = true
-                    },
-                    modifier = Modifier.testTag("workspace-batch-rename-cancel"),
-                ) { Text("Cancel") }
+                if (pendingRenamePreview != null) {
+                    TextButton(
+                        onClick = {
+                            pendingRenamePreview = null
+                            safetyResults = "Rename cancelled. No files were changed."
+                        },
+                        modifier = Modifier.testTag("workspace-batch-rename-cancel"),
+                    ) { Text("Cancel") }
+                }
             },
         )
     }
