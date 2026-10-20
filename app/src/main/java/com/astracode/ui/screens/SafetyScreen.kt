@@ -35,6 +35,7 @@ import com.astracode.ui.models.AtelierStorageHealth
 
 @Composable
 fun SafetyScreen(
+    modifier: Modifier = Modifier,
     health: AtelierStorageHealth?,
     isLoading: Boolean,
     message: String?,
@@ -42,7 +43,7 @@ fun SafetyScreen(
     onOpenAdvancedTools: () -> Unit,
 ) {
     Column(
-        modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 14.dp),
+        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
