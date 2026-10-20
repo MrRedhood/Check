@@ -139,7 +139,7 @@ internal fun WorkspaceBrowserPanel(
             }
             entries = snapshot.first
             folderCounts = snapshot.second
-            message = ""
+            if (recentTrashIds.isEmpty()) message = ""
         } catch (error: Exception) {
             message = error.message ?: "Could not load this folder."
             entries = emptyList()
