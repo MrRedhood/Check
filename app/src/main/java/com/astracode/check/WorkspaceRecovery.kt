@@ -77,7 +77,7 @@ internal object WorkspaceRecovery {
     /** True for Trash, journals, temporary writes, backups, and staged rename files. */
     fun isInternalPath(relativePath: String): Boolean =
         relativePath.split('/').any { segment ->
-            segment in internalDirectories || internalPrefixes.any { prefix -> segment.startsWith(prefix) }
+            segment in internalDirectories || segment.startsWith(".astracode-")
         }
 
     fun resolve(root: File, relativePath: String, allowRoot: Boolean = false): File {

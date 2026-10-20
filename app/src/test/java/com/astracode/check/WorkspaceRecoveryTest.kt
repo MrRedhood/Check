@@ -99,9 +99,11 @@ class WorkspaceRecoveryTest {
         val root = Files.createTempDirectory("check-reserved-system-files").toFile()
         try {
             File(root, ".astracode-write-abandoned.tmp").writeText("partial data")
+            File(root, ".astracode-provider-backup.orphan").writeText("recoverable backup")
             File(root, "visible.txt").writeText("user data")
             assertTrue(WorkspaceRecovery.isInternalPath(".astracode-trash/items/x"))
             assertTrue(WorkspaceRecovery.isInternalPath(".astracode-write-abandoned.tmp"))
+            assertTrue(WorkspaceRecovery.isInternalPath("src/.astracode-provider-backup.orphan"))
             assertTrue(WorkspaceRecovery.search(root, WorkspaceSearchOptions(includeHidden = true)).none {
                 it.path.startsWith(".astracode-")
             })
