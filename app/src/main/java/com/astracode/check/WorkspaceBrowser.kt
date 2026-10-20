@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
@@ -232,7 +233,7 @@ internal fun WorkspaceBrowserPanel(
                     onClick = { bulkActionKind = "zip"; bulkInput = "archive.zip" },
                     enabled = selectedPaths.isNotEmpty(),
                     modifier = Modifier.testTag("workspace-bulk-zip"),
-                ) { Text("Create ZIP") }
+                ) { Text("Move into ZIP") }
                 TextButton(
                     onClick = { bulkActionKind = "move"; bulkInput = currentDirectory.substringBeforeLast('/', "") },
                     enabled = selectedPaths.isNotEmpty(),
@@ -386,7 +387,7 @@ internal fun WorkspaceBrowserPanel(
                         },
                         enabled = selectedPaths.isNotEmpty(),
                         modifier = Modifier.testTag("workspace-zip-bulk-create"),
-                    ) { Text("Create ZIP") }
+                    ) { Text("Move into ZIP") }
                     TextButton(
                         onClick = {
                             archiveOperationKind = "copy-selected"
@@ -516,10 +517,9 @@ internal fun WorkspaceBrowserPanel(
                                         currentDirectory = entry.path
                                         refreshKey++
                                     } else if (entry.name.endsWith(".zip", ignoreCase = true)) {
-                                        archivePath = entry.path
-                                        archiveDirectory = ""
-                                        openedArchiveEntry = null
-                                        refreshKey++
+                                        operationEntry = entry
+                                        operationKind = "extract"
+                                        operationInput = entry.path.replace(Regex("(?i)\\.zip$"), "")
                                     } else openedFile = entry.path
                                 },
                                 onLongClick = {
@@ -542,7 +542,19 @@ internal fun WorkspaceBrowserPanel(
                                 modifier = Modifier.testTag("workspace-select-" + entry.name),
                             )
                         }
-                        Icon(if (entry.isDirectory) Icons.Filled.Folder else Icons.Filled.Description, contentDescription = null)
+                        Icon(
+                            imageVector = when {
+                                entry.isDirectory -> Icons.Filled.Folder
+                                entry.name.endsWith(".zip", ignoreCase = true) -> Icons.Filled.Archive
+                                else -> Icons.Filled.Description
+                            },
+                            contentDescription = when {
+                                entry.isDirectory -> "Folder"
+                                entry.name.endsWith(".zip", ignoreCase = true) -> "ZIP archive"
+                                else -> "File"
+                            },
+                            modifier = Modifier.testTag("workspace-entry-icon-${entry.name}"),
+                        )
                         Spacer(Modifier.padding(4.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(entry.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -730,7 +742,7 @@ internal fun WorkspaceBrowserPanel(
                         actionEntry = null
                     },
                     modifier = Modifier.fillMaxWidth().testTag("workspace-action-zip"),
-                ) { Text("Create ZIP") }
+                ) { Text("Move into ZIP") }
                 if (entry.name.endsWith(".zip", ignoreCase = true) && !entry.isDirectory) {
                     TextButton(
                         onClick = {
@@ -741,15 +753,6 @@ internal fun WorkspaceBrowserPanel(
                         },
                         modifier = Modifier.fillMaxWidth().testTag("workspace-action-extract"),
                     ) { Text("Extract ZIP") }
-                }
-                if (entry.name.endsWith(".zip", ignoreCase = true) && !entry.isDirectory) {
-                    TextButton(onClick = {
-                        archivePath = entry.path
-                        archiveDirectory = ""
-                        openedArchiveEntry = null
-                        actionEntry = null
-                        refreshKey++
-                    }, modifier = Modifier.fillMaxWidth().testTag("workspace-action-browse-zip")) { Text("Browse ZIP without extracting") }
                 }
                 TextButton(
                     onClick = {
@@ -815,12 +818,15 @@ internal fun WorkspaceBrowserPanel(
                 else -> "Move " + entry.name
             }) },
             text = { Column {
-                Text(when (kind) {
-                    "rename" -> "Enter a new name for this item."
-                    "copy" -> "Enter the new name for the copy in this folder."
-                    "extract" -> "Choose a new destination folder path relative to the workspace root. Existing folders will not be overwritten."
-                    else -> "Enter the destination path relative to the workspace root."
-                })
+                Text(
+                    when (kind) {
+                        "rename" -> "Enter a new name for this item."
+                        "copy" -> "Enter the new name for the copy in this folder."
+                        "extract" -> "ZIP files cannot be edited directly. Extract the contents first, then open the extracted files to edit them. Choose a destination folder; existing folders will not be overwritten."
+                        else -> "Enter the destination path relative to the workspace root."
+                    },
+                    modifier = if (kind == "extract") Modifier.testTag("workspace-extract-explanation") else Modifier,
+                )
                 OutlinedTextField(value = operationInput, onValueChange = { operationInput = it },
                     label = { Text(if (kind == "move" || kind == "extract") "Destination path" else "Name") },
                     modifier = Modifier.fillMaxWidth().testTag("workspace-operation-input"))
@@ -885,7 +891,7 @@ internal fun WorkspaceBrowserPanel(
             onDismissRequest = { bulkActionKind = null },
             title = {
                 Text(when (kind) {
-                    "zip" -> "Create ZIP from ${selected.size} item(s)"
+                    "zip" -> "Move ${selected.size} item(s) into ZIP"
                     "move" -> "Move ${selected.size} item(s)"
                     "copy" -> "Copy ${selected.size} item(s)"
                     else -> "Delete ${selected.size} item(s)?"
@@ -894,7 +900,7 @@ internal fun WorkspaceBrowserPanel(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(when (kind) {
-                        "zip" -> "Create an archive containing the selected files and folders. File contents are kept exactly as they are."
+                        "zip" -> "Create a ZIP containing the selected files and folders, then remove the originals only after the archive is written successfully."
                         "move" -> "Enter a destination folder relative to the workspace root. The folder will be created if needed."
                         "copy" -> "Copy selected items into a destination folder. The folder will be created if needed."
                         else -> "Delete all selected items and their contents. Linked external copies will also be deleted where they exist."
@@ -928,9 +934,12 @@ internal fun WorkspaceBrowserPanel(
                                             }
                                             if (!isSimpleWorkspaceName(zipName)) throw IOException("Enter a ZIP file name without path separators.")
                                             val archivePath = joinWorkspacePath(currentDirectory, zipName)
-                                            WorkspaceArchive.createZip(root, paths, archivePath, currentDirectory)
+                                            WorkspaceArchive.moveToZip(root, paths, archivePath, currentDirectory)
+                                            paths.sortedByDescending { it.count { ch -> ch == '/' } }.forEach { path ->
+                                                links = updateSyncedPathsAfterDelete(context, root, externalRoot, links, path)
+                                            }
                                             syncLinkedWorkspacePaths(root, externalRoot, links, archivePath)
-                                            "Created $zipName"
+                                            "Moved selected items into $zipName"
                                         }
                                         "move", "copy" -> {
                                             val destinationFolder = if (raw.isBlank()) root.canonicalFile else resolveWorkspacePath(root, raw)
@@ -991,7 +1000,7 @@ internal fun WorkspaceBrowserPanel(
                         }
                     },
                     modifier = Modifier.testTag("confirm-workspace-bulk-action"),
-                ) { Text(when (kind) { "zip" -> "Create ZIP"; "copy" -> "Copy"; "move" -> "Move"; else -> "Delete" }) }
+                ) { Text(when (kind) { "zip" -> "Create ZIP & Move"; "copy" -> "Copy"; "move" -> "Move"; else -> "Delete" }) }
             },
             dismissButton = {
                 TextButton(onClick = { bulkActionKind = null }) { Text("Cancel") }

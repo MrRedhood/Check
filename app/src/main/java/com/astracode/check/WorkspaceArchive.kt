@@ -100,6 +100,29 @@ internal object WorkspaceArchive {
         return target
     }
 
+    /**
+     * Creates an archive and then removes the selected originals. The source items are
+     * deleted only after the completed ZIP has been moved into its final location.
+     */
+    fun moveToZip(
+        workspaceRoot: File,
+        sourcePaths: List<String>,
+        archivePath: String,
+        archiveBasePath: String = "",
+    ): File {
+        val root = workspaceRoot.canonicalFile
+        val sources = normalizeSources(root, sourcePaths)
+        val archive = createZip(root, sourcePaths, archivePath, archiveBasePath)
+        sources.forEach { source ->
+            if (source.exists() && !source.deleteRecursively()) {
+                throw IOException(
+                    "Created ${archive.name}, but could not remove the original item: ${source.name}. The ZIP was kept.",
+                )
+            }
+        }
+        return archive
+    }
+
     fun extractZip(workspaceRoot: File, archivePath: String, destinationPath: String): List<String> {
         val root = workspaceRoot.canonicalFile
         val archive = resolve(root, archivePath)

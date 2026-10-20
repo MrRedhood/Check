@@ -235,14 +235,16 @@ class MainActivityUiTest {
 
         composeRule.waitUntil(timeoutMillis = 5_000) {
             File(workspaceRoot, "app/bundle.zip").isFile &&
-                File(externalRoot, "app/bundle.zip").isFile
+                File(externalRoot, "app/bundle.zip").isFile &&
+                !File(workspaceRoot, "app/build.gradle.kts").exists() &&
+                !File(workspaceRoot, "app/src").exists()
         }
 
         composeRule.waitUntil(timeoutMillis = 5_000) {
             runCatching { composeRule.onNodeWithTag("workspace-entry-bundle.zip").assertIsDisplayed() }.isSuccess
         }
-        composeRule.onNodeWithTag("workspace-entry-bundle.zip").performTouchInput { longClick() }
-        composeRule.onNodeWithTag("workspace-action-extract").performClick()
+        composeRule.onNodeWithTag("workspace-entry-bundle.zip").performClick()
+        composeRule.onNodeWithTag("workspace-operation-input").assertIsDisplayed()
         composeRule.onNodeWithTag("workspace-operation-input").performTextReplacement("app/restored")
         composeRule.onNodeWithTag("confirm-workspace-operation").performClick()
 
@@ -261,7 +263,7 @@ class MainActivityUiTest {
 
 
     @Test
-    fun opensEditsAndManagesZipEntriesWithoutExtracting() {
+    fun tappingZipRequiresExtractionBeforeFilesCanBeEdited() {
         WorkspaceArchive.createZip(
             workspaceRoot,
             listOf("app/src/Main.kt"),
@@ -272,82 +274,44 @@ class MainActivityUiTest {
         waitForUiStage("workspace ZIP row") {
             runCatching { composeRule.onNodeWithTag("workspace-entry-project.zip").assertIsDisplayed() }.isSuccess
         }
+        composeRule.onNodeWithTag("workspace-entry-icon-project.zip").assertIsDisplayed()
 
         composeRule.onNodeWithTag("workspace-entry-project.zip").performTouchInput { longClick() }
         composeRule.onNodeWithTag("workspace-action-metadata").performClick()
-        waitForUiStage("metadata action started") {
-            runCatching { composeRule.onNodeWithTag("workspace-metadata-loading").assertIsDisplayed() }.isSuccess ||
-                runCatching { composeRule.onNodeWithTag("workspace-metadata-details").assertIsDisplayed() }.isSuccess ||
-                runCatching { composeRule.onNodeWithTag("workspace-message").assertIsDisplayed() }.isSuccess
-        }
-        try {
-            waitForUiStage("metadata dialog or error message after read") {
-                runCatching {
-                    composeRule.onNodeWithTag("workspace-metadata-details")
-                        .assertTextContains("Name: project.zip", substring = true)
-                }.isSuccess || runCatching {
-                    composeRule.onNodeWithTag("workspace-message").assertIsDisplayed()
-                }.isSuccess
-            }
-        } catch (error: AssertionError) {
-            val metadataStatus = runCatching {
-                composeRule.onNodeWithTag("workspace-metadata-status").fetchSemanticsNode().config.toString()
-            }.getOrDefault("No metadata status tag rendered.")
-            val metadataLoading = runCatching {
-                composeRule.onNodeWithTag("workspace-metadata-loading").fetchSemanticsNode().config.toString()
-            }.getOrDefault("No metadata loading tag rendered.")
-            val metadataDetailsNode = runCatching {
-                composeRule.onNodeWithTag("workspace-metadata-details").fetchSemanticsNode().config.toString()
-            }.getOrDefault("No metadata details tag rendered.")
-            throw AssertionError(
-                "Metadata dialog or error did not appear. $metadataStatus. $metadataLoading. $metadataDetailsNode",
-                error,
-            )
-        }
-        if (runCatching {
+        waitForUiStage("metadata details") {
+            runCatching {
                 composeRule.onNodeWithTag("workspace-metadata-details")
                     .assertTextContains("Name: project.zip", substring = true)
-            }.isFailure) {
-            val workspaceMessage = runCatching {
-                composeRule.onNodeWithTag("workspace-message").fetchSemanticsNode().config.toString()
-            }.getOrDefault("No visible workspace error message.")
-            throw AssertionError("Metadata dialog did not open after loading. Workspace message: " + workspaceMessage)
+            }.isSuccess
         }
-        composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Name: project.zip", substring = true)
-        composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Created:", substring = true)
-        composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Modified:", substring = true)
         composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Format: ZIP", substring = true)
-        composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Storage path:", substring = true)
         composeRule.onNodeWithTag("workspace-metadata-close").performClick()
 
-        composeRule.onNodeWithTag("workspace-entry-project.zip").performTouchInput { longClick() }
-        composeRule.onNodeWithTag("workspace-action-browse-zip").performClick()
-        waitForUiStage("ZIP root file row") {
-            runCatching { composeRule.onNodeWithTag("workspace-zip-entry-Main.kt").assertIsDisplayed() }.isSuccess
+        composeRule.onNodeWithTag("workspace-entry-project.zip").performClick()
+        waitForUiStage("extraction prompt") {
+            runCatching { composeRule.onNodeWithTag("workspace-operation-input").assertIsDisplayed() }.isSuccess
         }
-        composeRule.onNodeWithTag("workspace-zip-entry-Main.kt").performClick()
-        composeRule.onNodeWithTag("workspace-zip-editor-input").performTextReplacement("fun main() = 7\n")
-        composeRule.onNodeWithTag("workspace-zip-save-file").performClick()
-        waitForUiStage("edited ZIP bytes persisted") {
-            runCatching {
-                WorkspaceArchiveBrowser.read(workspaceRoot, "project.zip", "Main.kt")
-                    .toString(Charsets.UTF_8) == "fun main() = 7\n"
-            }.getOrDefault(false)
-        }
-        assertFalse(File(workspaceRoot, "Main.kt").exists())
+        composeRule.onNodeWithTag("workspace-extract-explanation")
+            .assertTextContains("cannot be edited directly", substring = true)
+        composeRule.onNodeWithTag("workspace-operation-input").performTextReplacement("restored-project")
+        composeRule.onNodeWithTag("confirm-workspace-operation").performClick()
 
-        composeRule.onNodeWithTag("workspace-zip-editor-back").performClick()
-        waitForUiStage("ZIP editor back navigation") {
-            runCatching { composeRule.onNodeWithTag("workspace-zip-entry-Main.kt").assertIsDisplayed() }.isSuccess
+        waitForUiStage("extracted folder appears") {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-restored-project").assertIsDisplayed() }.isSuccess
         }
-        composeRule.onNodeWithTag("workspace-zip-entry-Main.kt").performTouchInput { longClick() }
-        composeRule.onNodeWithTag("workspace-zip-action-rename").performClick()
-        composeRule.onNodeWithTag("workspace-zip-operation-input").performTextReplacement("App.kt")
-        composeRule.onNodeWithTag("workspace-zip-confirm-operation").performClick()
-        waitForUiStage("renamed ZIP entry row") {
-            runCatching { composeRule.onNodeWithTag("workspace-zip-entry-App.kt").assertIsDisplayed() }.isSuccess
+        composeRule.onNodeWithTag("workspace-entry-restored-project").performClick()
+        waitForUiStage("extracted file appears") {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-Main.kt").assertIsDisplayed() }.isSuccess
         }
-        assertEquals("fun main() = 7\n", WorkspaceArchiveBrowser.read(workspaceRoot, "project.zip", "App.kt").toString(Charsets.UTF_8))
+        composeRule.onNodeWithTag("workspace-entry-Main.kt").performClick()
+        waitForUiStage("extracted file editor") {
+            runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-editor-input").performTextReplacement("fun main() = 7\\n")
+        composeRule.onNodeWithTag("workspace-save-file").performClick()
+        waitForUiStage("edited extracted file saved") {
+            File(workspaceRoot, "restored-project/Main.kt").takeIf { it.isFile }?.readText() == "fun main() = 7\\n"
+        }
     }
 
     private fun waitForUiStage(stage: String, condition: () -> Boolean) {
