@@ -307,10 +307,10 @@ class MainActivityUiTest {
         waitForUiStage("extracted file editor") {
             runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertIsDisplayed() }.isSuccess
         }
-        composeRule.onNodeWithTag("workspace-editor-input").performTextReplacement("fun main() = 7\\n")
+        composeRule.onNodeWithTag("workspace-editor-input").performTextReplacement("fun main() = 7\n")
         composeRule.onNodeWithTag("workspace-save-file").performClick()
         waitForUiStage("edited extracted file saved") {
-            File(workspaceRoot, "restored-project/Main.kt").takeIf { it.isFile }?.readText() == "fun main() = 7\\n"
+            File(workspaceRoot, "restored-project/Main.kt").takeIf { it.isFile }?.readText() == "fun main() = 7\n"
         }
     }
 
