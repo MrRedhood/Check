@@ -314,6 +314,52 @@ class MainActivityUiTest {
         }
     }
 
+    @Test
+    fun fileSafetyToolsSupportSearchPreviewFirstRenameAndUndoDelete() {
+        composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
+        waitForUiStage("safety tool button") {
+            runCatching { composeRule.onNodeWithTag("workspace-safety-tools").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-safety-tools").performClick()
+        composeRule.onNodeWithTag("workspace-safety-search-input").performTextReplacement("Main.kt")
+        composeRule.onNodeWithTag("workspace-safety-search").performClick()
+        waitForUiStage("search results") {
+            runCatching {
+                composeRule.onNodeWithTag("workspace-safety-results").assertTextContains("app/src/Main.kt")
+            }.isSuccess
+        }
+
+        composeRule.onNodeWithTag("workspace-batch-rename-input")
+            .performTextReplacement("README.txt=README-renamed.txt")
+        composeRule.onNodeWithTag("workspace-batch-rename").performClick()
+        composeRule.onNodeWithTag("workspace-batch-rename-confirm").assertIsDisplayed()
+        assertFalse(File(workspaceRoot, "README-renamed.txt").exists())
+        composeRule.onNodeWithTag("workspace-batch-rename-confirm").performClick()
+        waitForUiStage("batch rename committed") {
+            File(workspaceRoot, "README-renamed.txt").isFile &&
+                !File(workspaceRoot, "README.txt").exists()
+        }
+
+        composeRule.onNodeWithTag("workspace-safety-close").performClick()
+        waitForUiStage("renamed file appears in browser") {
+            runCatching {
+                composeRule.onNodeWithTag("workspace-entry-README-renamed.txt").assertIsDisplayed()
+            }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-entry-README-renamed.txt")
+            .performTouchInput { longClick() }
+        composeRule.onNodeWithTag("workspace-action-delete").performClick()
+        composeRule.onNodeWithTag("confirm-workspace-delete").performClick()
+        waitForUiStage("Trash deletion offers Undo") {
+            !File(workspaceRoot, "README-renamed.txt").exists() &&
+                runCatching { composeRule.onNodeWithTag("workspace-undo-delete").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-undo-delete").performClick()
+        waitForUiStage("Undo restores original bytes") {
+            File(workspaceRoot, "README-renamed.txt").takeIf { it.isFile }?.readText() == "Workspace fixture\n"
+        }
+    }
+
     private fun waitForUiStage(stage: String, condition: () -> Boolean) {
         try {
             composeRule.waitUntil(timeoutMillis = 5_000, condition = condition)

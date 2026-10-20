@@ -1144,7 +1144,12 @@ internal fun WorkspaceBrowserPanel(
                     if (safetyResults.isNotBlank()) Text(safetyResults, modifier = Modifier.testTag("workspace-safety-results"))
                 }
             },
-            confirmButton = { TextButton(onClick = { showSafetyTools = false }) { Text("Close") } },
+            confirmButton = {
+                TextButton(
+                    onClick = { showSafetyTools = false },
+                    modifier = Modifier.testTag("workspace-safety-close"),
+                ) { Text("Close") }
+            },
         )
     }
 
