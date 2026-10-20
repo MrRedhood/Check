@@ -275,7 +275,12 @@ class MainActivityUiTest {
 
         composeRule.onNodeWithTag("workspace-entry-project.zip").performTouchInput { longClick() }
         composeRule.onNodeWithTag("workspace-action-metadata").performClick()
-        waitForUiStage("metadata dialog or error message") {
+        waitForUiStage("metadata action started") {
+            runCatching { composeRule.onNodeWithTag("workspace-metadata-loading").assertIsDisplayed() }.isSuccess ||
+                runCatching { composeRule.onNodeWithTag("workspace-metadata-details").assertIsDisplayed() }.isSuccess ||
+                runCatching { composeRule.onNodeWithTag("workspace-message").assertIsDisplayed() }.isSuccess
+        }
+        waitForUiStage("metadata dialog or error message after read") {
             runCatching {
                 composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Name: project.zip")
             }.isSuccess || runCatching {
@@ -288,7 +293,7 @@ class MainActivityUiTest {
             val workspaceMessage = runCatching {
                 composeRule.onNodeWithTag("workspace-message").fetchSemanticsNode().config.toString()
             }.getOrDefault("No visible workspace error message.")
-            throw AssertionError("Metadata dialog did not open. Workspace message: " + workspaceMessage)
+            throw AssertionError("Metadata dialog did not open after loading. Workspace message: " + workspaceMessage)
         }
         composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Name: project.zip")
         composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Created:")

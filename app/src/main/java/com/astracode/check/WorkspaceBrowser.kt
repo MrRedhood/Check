@@ -94,6 +94,7 @@ internal fun WorkspaceBrowserPanel(
     var archiveOperationKind by remember(root) { mutableStateOf<String?>(null) }
     var archiveOperationInput by remember(root) { mutableStateOf("") }
     var metadataDetails by remember(root) { mutableStateOf<String?>(null) }
+    var metadataLoading by remember(root) { mutableStateOf(false) }
     val context = LocalContext.current
     val externalRoot = remember(root) { File(root.parentFile, "external-workspace") }
     var syncedPaths by remember(root) { mutableStateOf(loadSyncedPaths(context, root)) }
@@ -181,6 +182,9 @@ internal fun WorkspaceBrowserPanel(
     }
 
     Column(modifier = modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (metadataLoading) {
+            Text("Reading metadata…", modifier = Modifier.testTag("workspace-metadata-loading"))
+        }
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(if (archivePath == null) "Workspace files" else "ZIP: " + archivePath!!.substringAfterLast("/"), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
             if (openedFile == null && openedArchiveEntry == null) {
@@ -720,16 +724,25 @@ internal fun WorkspaceBrowserPanel(
                         refreshKey++
                     }, modifier = Modifier.fillMaxWidth().testTag("workspace-action-browse-zip")) { Text("Browse ZIP without extracting") }
                 }
-                TextButton(onClick = {
-                    scope.launch {
-                        runCatching { withContext(Dispatchers.IO) { workspaceMetadataText(root, entry.path) } }
-                            .onSuccess { metadataDetails = it; actionEntry = null }
-                            .onFailure { error ->
-                                actionEntry = null
-                                message = error.message ?: "Could not read metadata."
+                TextButton(
+                    onClick = {
+                        actionEntry = null
+                        metadataDetails = null
+                        message = ""
+                        metadataLoading = true
+                        scope.launch {
+                            val result = runCatching {
+                                withContext(Dispatchers.IO) { workspaceMetadataText(root, entry.path) }
                             }
-                    }
-                }, modifier = Modifier.fillMaxWidth().testTag("workspace-action-metadata")) { Text("Metadata") }
+                            metadataLoading = false
+                            result.onSuccess { details -> metadataDetails = details }
+                                .onFailure { error ->
+                                    message = error.message ?: "Could not read metadata."
+                                }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().testTag("workspace-action-metadata"),
+                ) { Text("Metadata") }
                 TextButton(onClick = { syncEntry = entry; actionEntry = null },
                     modifier = Modifier.fillMaxWidth().testTag("workspace-action-sync")) { Text("Sync") }
                 TextButton(onClick = { operationEntry = entry; operationKind = "rename"; operationInput = entry.name; actionEntry = null },
