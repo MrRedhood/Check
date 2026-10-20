@@ -38,6 +38,53 @@ class WorkspaceRecoveryTest {
         } finally { root.deleteRecursively() }
     }
 
+    @Test fun trashedDirectoryRestoresNestedFilesAndEmptyDirectories() {
+        val root = Files.createTempDirectory("check-trash-directory").toFile()
+        try {
+            File(root, "project/src/nested").mkdirs()
+            File(root, "project/src/Main.kt").writeText("fun main() = Unit")
+            File(root, "project/src/nested/config.json").writeText("{\"enabled\":true}")
+            File(root, "project/empty").mkdir()
+
+            val trash = WorkspaceRecovery.moveToTrash(root, "project")
+            assertFalse(File(root, "project").exists())
+            assertTrue(WorkspaceRecovery.listTrash(root).any { it.id == trash.id })
+
+            WorkspaceRecovery.restoreFromTrash(root, trash.id)
+
+            assertEquals("fun main() = Unit", File(root, "project/src/Main.kt").readText())
+            assertEquals("{\"enabled\":true}", File(root, "project/src/nested/config.json").readText())
+            assertTrue(File(root, "project/empty").isDirectory)
+            assertTrue(WorkspaceRecovery.listTrash(root).none { it.id == trash.id })
+        } finally { root.deleteRecursively() }
+    }
+
+    @Test fun directoryRestoreCollisionKeepsNestedDataInTrashUntilAlternateRestore() {
+        val root = Files.createTempDirectory("check-trash-directory-collision").toFile()
+        try {
+            File(root, "project/src").mkdirs()
+            File(root, "project/src/Main.kt").writeText("original data")
+            val trash = WorkspaceRecovery.moveToTrash(root, "project")
+
+            File(root, "project/src").mkdirs()
+            File(root, "project/src/Main.kt").writeText("newer data")
+            try {
+                WorkspaceRecovery.restoreFromTrash(root, trash.id)
+                fail("Restore must not replace an existing directory.")
+            } catch (expected: java.io.IOException) {
+                assertTrue(expected.message.orEmpty().contains("already exists"))
+            }
+
+            assertTrue(WorkspaceRecovery.listTrash(root).any { it.id == trash.id })
+            assertEquals("newer data", File(root, "project/src/Main.kt").readText())
+
+            WorkspaceRecovery.restoreFromTrash(root, trash.id, "project-recovered")
+            assertEquals("original data", File(root, "project-recovered/src/Main.kt").readText())
+            assertEquals("newer data", File(root, "project/src/Main.kt").readText())
+            assertTrue(WorkspaceRecovery.listTrash(root).none { it.id == trash.id })
+        } finally { root.deleteRecursively() }
+    }
+
     @Test fun retentionCleanupOnlyRemovesExpiredValidTrashRecords() {
         val root = Files.createTempDirectory("check-trash-retention").toFile()
         try {
