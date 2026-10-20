@@ -38,7 +38,7 @@ class WorkspaceArchiveTest {
             File(root, "src/nested").mkdirs()
             val sourceBytes = byteArrayOf(0, 1, -1, -128, 42)
             File(root, "src/nested/data.bin").writeBytes(sourceBytes)
-            File(root, "Main.kt").writeText("fun main() = Unit\\n", Charsets.UTF_8)
+            File(root, "Main.kt").writeText("fun main() = Unit\n", Charsets.UTF_8)
 
             WorkspaceArchive.moveToZip(root, listOf("src", "Main.kt"), "bundle.zip")
 
@@ -47,7 +47,7 @@ class WorkspaceArchiveTest {
             assertFalse(File(root, "Main.kt").exists())
             WorkspaceArchive.extractZip(root, "bundle.zip", "restored")
             assertArrayEquals(sourceBytes, File(root, "restored/src/nested/data.bin").readBytes())
-            assertEqualsText("fun main() = Unit\\n", File(root, "restored/Main.kt").readText(Charsets.UTF_8))
+            assertEqualsText("fun main() = Unit\n", File(root, "restored/Main.kt").readText(Charsets.UTF_8))
         } finally {
             root.deleteRecursively()
         }
