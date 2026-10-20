@@ -373,6 +373,25 @@ class MainActivityUiTest {
         }
     }
 
+    @Test
+    fun atelierPreviewNavigatesThroughDesignedScreens() {
+        composeRule.onNodeWithTag("open-atelier-preview").performClick()
+        composeRule.onNodeWithText("Design preview").assertIsDisplayed()
+        composeRule.onNodeWithText("Sample content only · no files are changed in this preview").assertIsDisplayed()
+
+        composeRule.onNodeWithTag("bottom-nav-search").performClick()
+        composeRule.onNodeWithText("Search & inspect").assertIsDisplayed()
+
+        composeRule.onNodeWithTag("bottom-nav-safety").performClick()
+        composeRule.onNodeWithText("Safety & health").assertIsDisplayed()
+
+        composeRule.onNodeWithTag("bottom-nav-trash").performClick()
+        composeRule.onNodeWithText("Trash & restore").assertIsDisplayed()
+
+        composeRule.onNodeWithTag("bottom-nav-files").performClick()
+        composeRule.onNodeWithText("WORKSPACE / FILE SYSTEM").assertIsDisplayed()
+    }
+
     private fun waitForUiStage(stage: String, timeoutMillis: Long = 5_000, condition: () -> Boolean) {
         try {
             composeRule.waitUntil(timeoutMillis = timeoutMillis, condition = condition)
