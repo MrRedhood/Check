@@ -293,8 +293,10 @@ private fun AtelierFileRow(
                 Text(item.name, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
                     buildString {
-                        if (item.childCount != null && item.isDirectory) append(item.childCount).append(" items · ")
-                        append(formatSize(item.sizeBytes))
+                        if (item.name.startsWith(".") && item.isDirectory) append("Hidden folder · ")
+                        else if (item.name.startsWith(".") && !item.isDirectory) append("Hidden file · ")
+                        if (item.childCount != null && item.isDirectory) append(item.childCount).append(" items")
+                        else append(formatSize(item.sizeBytes))
                         if (item.modifiedLabel.isNotBlank()) append(" · ").append(item.modifiedLabel)
                     },
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
