@@ -1,6 +1,7 @@
 package com.astracode.check
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -69,6 +70,7 @@ fun AtelierPreviewScreen(onBack: () -> Unit) {
                     Text("Sample content only · no files are changed in this preview", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                     TextButton(onClick = onBack) { Text("Back to storage test") }
                 }
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 when (currentScreen.value) {
                     Screen.Files -> FilesScreen(
                         rootName = "AstraCode workspace", currentDirectory = "", storageLabel = "Preview mode",
@@ -112,8 +114,8 @@ fun AtelierPreviewScreen(onBack: () -> Unit) {
                         onRestore = { _, _ -> message.value = "Preview only: nothing was restored." },
                     )
                 }
+                }
                 message.value?.let { Text(it, color = MaterialTheme.colorScheme.tertiary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) }
-                Spacer(modifier = Modifier.weight(1f))
                 AstraCodeBottomNav(currentScreen.value, onTabSelected = { currentScreen.value = it })
             }
         }
