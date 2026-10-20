@@ -269,13 +269,13 @@ class MainActivityUiTest {
             "app/src",
         )
         composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
-        composeRule.waitUntil(timeoutMillis = 5_000) {
+        waitForUiStage("workspace ZIP row") {
             runCatching { composeRule.onNodeWithTag("workspace-entry-project.zip").assertIsDisplayed() }.isSuccess
         }
 
         composeRule.onNodeWithTag("workspace-entry-project.zip").performTouchInput { longClick() }
         composeRule.onNodeWithTag("workspace-action-metadata").performClick()
-        composeRule.waitUntil(timeoutMillis = 5_000) {
+        waitForUiStage("metadata dialog or error message") {
             runCatching {
                 composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Name: project.zip")
             }.isSuccess || runCatching {
@@ -299,13 +299,13 @@ class MainActivityUiTest {
 
         composeRule.onNodeWithTag("workspace-entry-project.zip").performTouchInput { longClick() }
         composeRule.onNodeWithTag("workspace-action-browse-zip").performClick()
-        composeRule.waitUntil(timeoutMillis = 5_000) {
+        waitForUiStage("ZIP root file row") {
             runCatching { composeRule.onNodeWithTag("workspace-zip-entry-Main.kt").assertIsDisplayed() }.isSuccess
         }
         composeRule.onNodeWithTag("workspace-zip-entry-Main.kt").performClick()
         composeRule.onNodeWithTag("workspace-zip-editor-input").performTextReplacement("fun main() = 7\n")
         composeRule.onNodeWithTag("workspace-zip-save-file").performClick()
-        composeRule.waitUntil(timeoutMillis = 5_000) {
+        waitForUiStage("edited ZIP bytes persisted") {
             runCatching {
                 WorkspaceArchiveBrowser.read(workspaceRoot, "project.zip", "Main.kt")
                     .toString(Charsets.UTF_8) == "fun main() = 7\n"
@@ -314,17 +314,25 @@ class MainActivityUiTest {
         assertFalse(File(workspaceRoot, "Main.kt").exists())
 
         composeRule.onNodeWithTag("workspace-zip-editor-back").performClick()
-        composeRule.waitUntil(timeoutMillis = 5_000) {
+        waitForUiStage("ZIP editor back navigation") {
             runCatching { composeRule.onNodeWithTag("workspace-zip-entry-Main.kt").assertIsDisplayed() }.isSuccess
         }
         composeRule.onNodeWithTag("workspace-zip-entry-Main.kt").performTouchInput { longClick() }
         composeRule.onNodeWithTag("workspace-zip-action-rename").performClick()
         composeRule.onNodeWithTag("workspace-zip-operation-input").performTextReplacement("App.kt")
         composeRule.onNodeWithTag("workspace-zip-confirm-operation").performClick()
-        composeRule.waitUntil(timeoutMillis = 5_000) {
+        waitForUiStage("renamed ZIP entry row") {
             runCatching { composeRule.onNodeWithTag("workspace-zip-entry-App.kt").assertIsDisplayed() }.isSuccess
         }
         assertEquals("fun main() = 7\n", WorkspaceArchiveBrowser.read(workspaceRoot, "project.zip", "App.kt").toString(Charsets.UTF_8))
+    }
+
+    private fun waitForUiStage(stage: String, condition: () -> Boolean) {
+        try {
+            composeRule.waitUntil(timeoutMillis = 5_000, condition = condition)
+        } catch (error: Throwable) {
+            throw AssertionError("Timed out waiting for UI stage: " + stage, error)
+        }
     }
 
 }
