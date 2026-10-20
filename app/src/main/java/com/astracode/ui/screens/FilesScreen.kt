@@ -115,6 +115,13 @@ fun FilesScreen(
             IconButton(onClick = onNewFolder, modifier = Modifier.testTag("new-folder-button")) {
                 Icon(Icons.Outlined.Add, contentDescription = "New folder", tint = MaterialTheme.colorScheme.primary)
             }
+            Button(
+                onClick = onNewFile,
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.testTag("new-file-button"),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+            ) { Text("New file", maxLines = 1) }
         }
 
         Row(
@@ -163,7 +170,7 @@ fun FilesScreen(
                 )
             }
             if (currentDirectory.isNotBlank()) {
-                TextButton(onClick = onGoUp, enabled = !selectionMode) {
+                TextButton(onClick = onGoUp, enabled = !selectionMode, modifier = Modifier.testTag("workspace-go-up")) {
                     Icon(Icons.Outlined.ArrowBack, contentDescription = null, modifier = Modifier.size(15.dp))
                     Spacer(Modifier.width(4.dp))
                     Text("Up")
@@ -252,7 +259,7 @@ private fun AtelierFileRow(
     Surface(
         color = if (selected) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surfaceContainerLow,
         shape = RoundedCornerShape(14.dp),
-        modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick),
+        modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick).testTag("entry-${item.name}"),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp),
