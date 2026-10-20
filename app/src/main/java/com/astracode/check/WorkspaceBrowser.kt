@@ -1466,7 +1466,7 @@ internal fun WorkspaceBrowserPanel(
                                 refreshKey++
                                 message = if (trashRecords.isNotEmpty()) "$summary. Undo is available." else summary
                             }.onFailure { error ->
-                                syncedPaths = loadSyncedPaths(context)
+                                syncedPaths = loadSyncedPaths(context, root)
                                 recentTrashIds = trashedItems.map { it.id }
                                 bulkActionKind = null
                                 selectedPaths = emptySet()
