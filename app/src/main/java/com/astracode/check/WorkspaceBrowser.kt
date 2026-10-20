@@ -96,6 +96,7 @@ internal fun WorkspaceBrowserPanel(
     var metadataDetails by remember(root) { mutableStateOf<String?>(null) }
     var metadataLoading by remember(root) { mutableStateOf(false) }
     var metadataRequestPath by remember(root) { mutableStateOf<String?>(null) }
+    var metadataStatus by remember(root) { mutableStateOf("idle") }
     val context = LocalContext.current
     val externalRoot = remember(root) { File(root.parentFile, "external-workspace") }
     var syncedPaths by remember(root) { mutableStateOf(loadSyncedPaths(context, root)) }
@@ -184,14 +185,19 @@ internal fun WorkspaceBrowserPanel(
 
     LaunchedEffect(root, metadataRequestPath) {
         val path = metadataRequestPath ?: return@LaunchedEffect
+        metadataStatus = "running"
         metadataLoading = true
         try {
-            metadataDetails = withContext(Dispatchers.IO) {
+            val details = withContext(Dispatchers.IO) {
                 workspaceMetadataText(root, path)
             }
+            metadataDetails = details
+            metadataStatus = "success"
         } catch (error: kotlinx.coroutines.CancellationException) {
+            metadataStatus = "cancelled"
             throw error
         } catch (error: Exception) {
+            metadataStatus = "error: ${error.javaClass.simpleName}: ${error.message ?: "Could not read metadata."}"
             message = error.message ?: "Could not read metadata."
         } finally {
             metadataLoading = false
@@ -200,6 +206,9 @@ internal fun WorkspaceBrowserPanel(
     }
 
     Column(modifier = modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (metadataStatus != "idle") {
+            Text("Metadata status: $metadataStatus", modifier = Modifier.testTag("workspace-metadata-status"))
+        }
         if (metadataLoading) {
             Text("Reading metadata…", modifier = Modifier.testTag("workspace-metadata-loading"))
         }
@@ -748,6 +757,7 @@ internal fun WorkspaceBrowserPanel(
                         metadataDetails = null
                         message = ""
                         metadataLoading = true
+                        metadataStatus = "requested"
                         metadataRequestPath = entry.path
                     },
                     modifier = Modifier.fillMaxWidth().testTag("workspace-action-metadata"),
