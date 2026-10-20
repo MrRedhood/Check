@@ -162,7 +162,10 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.fillMaxSize().padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Text("Standalone file access check", style = MaterialTheme.typography.titleLarge)
+                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Text("Standalone file access check", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                            TextButton(onClick = { showAtelierPreview = true }, modifier = Modifier.testTag("open-atelier-preview")) { Text("UI Preview") }
+                        }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Button(
                                 onClick = { documentPicker.launch(arrayOf("*/*")) },
@@ -187,10 +190,6 @@ class MainActivity : ComponentActivity() {
                                 Icon(Icons.Filled.Folder, contentDescription = "Workspace files")
                             }
                         }
-                        TextButton(
-                            onClick = { showAtelierPreview = true },
-                            modifier = Modifier.testTag("open-atelier-preview"),
-                        ) { Text("Obsidian Atelier preview") }
                         if (showAtelierPreview) {
                             AtelierPreviewScreen(onBack = { showAtelierPreview = false })
                         } else if (showWorkspaceBrowser) {
