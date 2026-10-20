@@ -95,6 +95,7 @@ internal fun WorkspaceBrowserPanel(
     var archiveOperationInput by remember(root) { mutableStateOf("") }
     var metadataDetails by remember(root) { mutableStateOf<String?>(null) }
     var metadataLoading by remember(root) { mutableStateOf(false) }
+    var metadataRequestPath by remember(root) { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val externalRoot = remember(root) { File(root.parentFile, "external-workspace") }
     var syncedPaths by remember(root) { mutableStateOf(loadSyncedPaths(context, root)) }
@@ -178,6 +179,23 @@ internal fun WorkspaceBrowserPanel(
             openedArchiveEntry = null
         } finally {
             archiveLoading = false
+        }
+    }
+
+    LaunchedEffect(root, metadataRequestPath) {
+        val path = metadataRequestPath ?: return@LaunchedEffect
+        metadataLoading = true
+        try {
+            metadataDetails = withContext(Dispatchers.IO) {
+                workspaceMetadataText(root, path)
+            }
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            message = error.message ?: "Could not read metadata."
+        } finally {
+            metadataLoading = false
+            metadataRequestPath = null
         }
     }
 
@@ -730,16 +748,7 @@ internal fun WorkspaceBrowserPanel(
                         metadataDetails = null
                         message = ""
                         metadataLoading = true
-                        scope.launch {
-                            val result = runCatching {
-                                withContext(Dispatchers.IO) { workspaceMetadataText(root, entry.path) }
-                            }
-                            metadataLoading = false
-                            result.onSuccess { details -> metadataDetails = details }
-                                .onFailure { error ->
-                                    message = error.message ?: "Could not read metadata."
-                                }
-                        }
+                        metadataRequestPath = entry.path
                     },
                     modifier = Modifier.fillMaxWidth().testTag("workspace-action-metadata"),
                 ) { Text("Metadata") }
