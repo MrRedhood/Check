@@ -280,12 +280,25 @@ class MainActivityUiTest {
                 runCatching { composeRule.onNodeWithTag("workspace-metadata-details").assertIsDisplayed() }.isSuccess ||
                 runCatching { composeRule.onNodeWithTag("workspace-message").assertIsDisplayed() }.isSuccess
         }
-        waitForUiStage("metadata dialog or error message after read") {
-            runCatching {
-                composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Name: project.zip")
-            }.isSuccess || runCatching {
-                composeRule.onNodeWithTag("workspace-message").assertIsDisplayed()
-            }.isSuccess
+        try {
+            waitForUiStage("metadata dialog or error message after read") {
+                runCatching {
+                    composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Name: project.zip")
+                }.isSuccess || runCatching {
+                    composeRule.onNodeWithTag("workspace-message").assertIsDisplayed()
+                }.isSuccess
+            }
+        } catch (error: AssertionError) {
+            val metadataStatus = runCatching {
+                composeRule.onNodeWithTag("workspace-metadata-status").fetchSemanticsNode().config.toString()
+            }.getOrDefault("No metadata status tag rendered.")
+            val metadataLoading = runCatching {
+                composeRule.onNodeWithTag("workspace-metadata-loading").fetchSemanticsNode().config.toString()
+            }.getOrDefault("No metadata loading tag rendered.")
+            throw AssertionError(
+                "Metadata dialog or error did not appear. $metadataStatus. $metadataLoading",
+                error,
+            )
         }
         if (runCatching {
                 composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Name: project.zip")
