@@ -772,16 +772,6 @@ internal fun WorkspaceBrowserPanel(
             onDismissRequest = { archiveActionEntry = null },
             title = { Text(item.name + " options inside ZIP") },
             text = {
-                val renameReview = pendingRenamePreview
-                if (renameReview != null) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().heightIn(max = 350.dp).verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Text("Review every proposed change before applying it:")
-                        renameReview.forEach { (old, new) -> Text("$old  →  $new") }
-                    }
-                } else {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     TextButton(onClick = {
                         scope.launch {
@@ -928,6 +918,16 @@ internal fun WorkspaceBrowserPanel(
                 Text(if (pendingRenamePreview != null) "Review batch rename" else "File safety tools")
             },
             text = {
+                val renameReview = pendingRenamePreview
+                if (renameReview != null) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 350.dp).verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text("Review every proposed change before applying it:")
+                        renameReview.forEach { (old, new) -> Text("$old  →  $new") }
+                    }
+                } else {
                 Column(
                     modifier = Modifier.fillMaxWidth().heightIn(max = 500.dp).verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
