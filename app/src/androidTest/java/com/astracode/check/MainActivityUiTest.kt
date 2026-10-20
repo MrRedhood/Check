@@ -275,6 +275,11 @@ class MainActivityUiTest {
 
         composeRule.onNodeWithTag("workspace-entry-project.zip").performTouchInput { longClick() }
         composeRule.onNodeWithTag("workspace-action-metadata").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching {
+                composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Name: project.zip")
+            }.isSuccess
+        }
         composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Name: project.zip")
         composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Created:")
         composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Modified:")
