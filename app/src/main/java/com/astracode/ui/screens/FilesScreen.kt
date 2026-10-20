@@ -202,7 +202,7 @@ fun FilesScreen(
                             onClick = { onBulkAction("zip") },
                             enabled = selectedPaths.isNotEmpty(),
                             modifier = Modifier.testTag("workspace-bulk-zip"),
-                        ) { Text("Create ZIP") }
+                        ) { Text("Move into ZIP") }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         TextButton(onClick = { onBulkAction("copy") }, enabled = selectedPaths.isNotEmpty(), modifier = Modifier.testTag("workspace-bulk-copy")) { Text("Copy") }
