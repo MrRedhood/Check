@@ -980,6 +980,10 @@ internal fun WorkspaceBrowserPanel(
                             modifier = Modifier.testTag("workspace-safety-duplicates"),
                         ) { Text("Find duplicates") }
                     }
+                    // Keep operation feedback beside the controls that produced it, above the fold.
+                    if (safetyResults.isNotBlank()) {
+                        Text(safetyResults, modifier = Modifier.testTag("workspace-safety-results"))
+                    }
                     TextButton(
                         onClick = {
                             scope.launch {
@@ -1141,7 +1145,6 @@ internal fun WorkspaceBrowserPanel(
                             }
                         }
                     }
-                    if (safetyResults.isNotBlank()) Text(safetyResults, modifier = Modifier.testTag("workspace-safety-results"))
                 }
             },
             confirmButton = {
