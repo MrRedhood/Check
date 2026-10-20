@@ -57,6 +57,7 @@ internal object WorkspaceRecovery {
     private const val MAX_DEPTH = 128
     private const val MAX_ITEMS = 20_000
     private val internalDirectories = setOf(TRASH_DIRECTORY, OPERATIONS_DIRECTORY)
+    private val internalPrefixes = listOf(".astracode-write-", ".astracode-copy-", ".astracode-backup-", ".astracode-rename-", ".astracode-tmp-")
     private val lockMonitor = Object()
     private val activeLocks = mutableSetOf<String>()
     private val textExtensions = setOf(
@@ -73,6 +74,12 @@ internal object WorkspaceRecovery {
         "bmp" to "image/bmp",
     )
 
+    /** True for Trash, journals, temporary writes, backups, and staged rename files. */
+    fun isInternalPath(relativePath: String): Boolean =
+        relativePath.split('/').any { segment ->
+            segment in internalDirectories || internalPrefixes.any { prefix -> segment.startsWith(prefix) }
+        }
+
     fun resolve(root: File, relativePath: String, allowRoot: Boolean = false): File {
         val canonicalRoot = root.canonicalFile
         if (!canonicalRoot.exists() && !canonicalRoot.mkdirs()) throw IOException("Could not create workspace folder.")
@@ -88,7 +95,9 @@ internal object WorkspaceRecovery {
         if (segments.any { it.isBlank() || it == "." || it == ".." } || segments.size > MAX_DEPTH) {
             throw SecurityException("Invalid or excessively deep workspace path.")
         }
-        if (segments.first() in internalDirectories) throw SecurityException("This path is reserved for recovery data.")
+        if (segments.any { it in internalDirectories || it.startsWith(".astracode-") }) {
+            throw SecurityException("This path is reserved for workspace system data.")
+        }
         var current = canonicalRoot
         segments.forEach { segment ->
             current = File(current, segment)
@@ -382,7 +391,7 @@ internal object WorkspaceRecovery {
                 visited++
                 if (visited > MAX_ITEMS) throw IOException("Search stopped at the workspace item limit.")
                 val relative = base.toPath().relativize(path).toString().replace(File.separatorChar, '/')
-                if (relative.substringBefore('/') in internalDirectories || Files.isSymbolicLink(path)) continue
+                if (isInternalPath(relative) || Files.isSymbolicLink(path)) continue
                 if (!options.includeHidden && relative.split('/').any { it.startsWith(".") }) continue
                 val directory = Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)
                 if (!directory && !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) continue
@@ -412,7 +421,7 @@ internal object WorkspaceRecovery {
                 val path = iterator.next()
                 if (path == base.toPath() || Files.isSymbolicLink(path) || !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) continue
                 val relative = base.toPath().relativize(path).toString().replace(File.separatorChar, '/')
-                if (relative.substringBefore('/') in internalDirectories) continue
+                if (isInternalPath(relative)) continue
                 if (++visited > maxFiles) throw IOException("Duplicate scan stopped at the file limit.")
                 candidates.getOrPut(Files.size(path)) { mutableListOf() }.add(path.toFile())
             }
@@ -494,7 +503,7 @@ internal object WorkspaceRecovery {
                 val path = iterator.next()
                 if (path == base.toPath() || Files.isSymbolicLink(path)) continue
                 val relative = base.toPath().relativize(path).toString().replace(File.separatorChar, '/')
-                if (relative.substringBefore('/') in internalDirectories) continue
+                if (isInternalPath(relative)) continue
                 if (++visited > MAX_ITEMS) throw IOException("Storage scan stopped at the workspace item limit.")
                 if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) directories++
                 else if (Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {

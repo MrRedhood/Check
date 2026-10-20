@@ -95,6 +95,32 @@ class WorkspaceRecoveryTest {
         } finally { root.deleteRecursively() }
     }
 
+    @Test fun workspaceSystemFilesAreReservedAndExcludedFromSearchAndReports() {
+        val root = Files.createTempDirectory("check-reserved-system-files").toFile()
+        try {
+            File(root, ".astracode-write-abandoned.tmp").writeText("partial data")
+            File(root, "visible.txt").writeText("user data")
+            assertTrue(WorkspaceRecovery.isInternalPath(".astracode-trash/items/x"))
+            assertTrue(WorkspaceRecovery.isInternalPath(".astracode-write-abandoned.tmp"))
+            assertTrue(WorkspaceRecovery.search(root, WorkspaceSearchOptions(includeHidden = true)).none {
+                it.path.startsWith(".astracode-")
+            })
+            assertTrue(WorkspaceRecovery.findDuplicates(root).none {
+                it.paths.any { path -> path.startsWith(".astracode-") }
+            })
+            assertTrue(WorkspaceRecovery.storageReport(root).largestFiles.none {
+                it.first.startsWith(".astracode-")
+            })
+            try {
+                WorkspaceRecovery.resolve(root, ".astracode-write-abandoned.tmp")
+                fail("System-generated files must not be treated as user workspace files.")
+            } catch (_: SecurityException) {
+            }
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
     @Test fun journalStoresOperationMetadataButNotFileContents() {
         val root = Files.createTempDirectory("check-operation-journal").toFile()
         try {

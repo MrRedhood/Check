@@ -1705,7 +1705,10 @@ private fun listWorkspaceDirectory(root: File, relativePath: String): List<Works
         throw IOException("Not a folder: " + relativePath.ifEmpty { "." })
     }
     val files = directory.listFiles() ?: throw IOException("Cannot read folder: $relativePath")
-    return files.filterNot { it.name == WorkspaceRecovery.TRASH_DIRECTORY || it.name == WorkspaceRecovery.OPERATIONS_DIRECTORY }.map { file ->
+    return files.filterNot { file ->
+        val candidate = if (relativePath.isEmpty()) file.name else relativePath + "/" + file.name
+        WorkspaceRecovery.isInternalPath(candidate)
+    }.map { file ->
         val path = if (relativePath.isEmpty()) file.name else "$relativePath/${file.name}"
         val isDirectory = Files.isDirectory(file.toPath(), LinkOption.NOFOLLOW_LINKS)
         WorkspaceEntry(path, file.name, isDirectory, if (isDirectory) 0L else file.length().coerceAtLeast(0L), file.name.startsWith("."))
