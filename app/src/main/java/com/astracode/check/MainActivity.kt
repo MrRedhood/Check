@@ -80,6 +80,7 @@ class MainActivity : ComponentActivity() {
             var loading by remember { mutableStateOf(initialActive != null) }
             var showSavedFiles by remember { mutableStateOf(false) }
             var showWorkspaceBrowser by remember { mutableStateOf(false) }
+            var showAtelierPreview by remember { mutableStateOf(false) }
             var message by remember { mutableStateOf("") }
             val scope = rememberCoroutineScope()
 
@@ -186,7 +187,13 @@ class MainActivity : ComponentActivity() {
                                 Icon(Icons.Filled.Folder, contentDescription = "Workspace files")
                             }
                         }
-                        if (showWorkspaceBrowser) {
+                        TextButton(
+                            onClick = { showAtelierPreview = true },
+                            modifier = Modifier.testTag("open-atelier-preview"),
+                        ) { Text("Obsidian Atelier preview") }
+                        if (showAtelierPreview) {
+                            AtelierPreviewScreen(onBack = { showAtelierPreview = false })
+                        } else if (showWorkspaceBrowser) {
                             WorkspaceBrowserPanel(
                                 root = File(filesDir, "workspace"),
                                 modifier = Modifier.weight(1f).fillMaxWidth(),
