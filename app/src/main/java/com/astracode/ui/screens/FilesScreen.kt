@@ -101,12 +101,19 @@ fun FilesScreen(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    storageLabel + " · " + savedWorkspaceCount + if (savedWorkspaceCount == 1) " saved folder" else " saved folders",
+                    storageLabel,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                if (savedWorkspaceCount > 0) {
+                    Text(
+                        savedWorkspaceCount.toString() + if (savedWorkspaceCount == 1) " saved folder" else " saved folders",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
             }
             IconButton(onClick = onAddWorkspace, modifier = Modifier.testTag("add-workspace-button")) {
                 Icon(Icons.Outlined.FolderOpen, contentDescription = "Add workspace folder", tint = MaterialTheme.colorScheme.primary)
@@ -218,12 +225,16 @@ fun FilesScreen(
             Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Icon(Icons.Outlined.FolderOpen, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(38.dp))
-                    Text("This folder is empty", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleMedium)
-                    Text("Create a file or folder to get started.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-                    Button(onClick = onNewFile, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary), modifier = Modifier.testTag("new-file-button")) {
+                    Text("A clean workspace.", color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text("No files here yet. Create a source file to get started.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                    Button(
+                        onClick = onNewFile,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
+                        modifier = Modifier.testTag("empty-workspace-create-file"),
+                    ) {
                         Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(17.dp))
                         Spacer(Modifier.width(5.dp))
-                        Text("New file")
+                        Text("Create your first file")
                     }
                 }
             }
