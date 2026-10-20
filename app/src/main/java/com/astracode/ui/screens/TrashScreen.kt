@@ -36,6 +36,7 @@ import com.astracode.ui.models.AtelierTrashItem
 
 @Composable
 fun TrashScreen(
+    modifier: Modifier = Modifier,
     items: List<AtelierTrashItem>,
     isLoading: Boolean,
     message: String?,
@@ -44,7 +45,7 @@ fun TrashScreen(
 ) {
     val alternateDestination = remember { mutableStateOf("") }
     Column(
-        modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 14.dp),
+        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
