@@ -325,12 +325,15 @@ class MainActivityUiTest {
         composeRule.onNodeWithTag("workspace-safety-tools").performClick()
         composeRule.onNodeWithTag("workspace-safety-search-input").performTextReplacement("Main.kt")
         composeRule.onNodeWithTag("workspace-safety-search").performClick()
-        waitForUiStage("search result message appears") {
+        waitForUiStage("search results complete", timeoutMillis = 10_000) {
             runCatching {
-                composeRule.onNodeWithTag("workspace-safety-results").assertIsDisplayed()
+                val text = composeRule.onNodeWithTag("workspace-safety-results")
+                    .fetchSemanticsNode().config[SemanticsProperties.Text].joinToString("") { it.text }
+                assertTrue("Search is still running", text != "Searching…")
+                assertTrue("Search completed with unexpected result: $text",
+                    text.contains("app/src/Main.kt") || text.startsWith("Search failed:") || text == "No matching files.")
             }.isSuccess
         }
-        // Keep this assertion outside waitUntil so CI logs reveal the actual result text on failure.
         val searchResultText = composeRule.onNodeWithTag("workspace-safety-results")
             .fetchSemanticsNode().config[SemanticsProperties.Text].joinToString("") { it.text }
         assertTrue(
@@ -369,9 +372,9 @@ class MainActivityUiTest {
         }
     }
 
-    private fun waitForUiStage(stage: String, condition: () -> Boolean) {
+    private fun waitForUiStage(stage: String, timeoutMillis: Long = 5_000, condition: () -> Boolean) {
         try {
-            composeRule.waitUntil(timeoutMillis = 5_000, condition = condition)
+            composeRule.waitUntil(timeoutMillis = timeoutMillis, condition = condition)
         } catch (error: Throwable) {
             throw AssertionError("Timed out waiting for UI stage: " + stage, error)
         }

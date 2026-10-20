@@ -947,25 +947,35 @@ internal fun WorkspaceBrowserPanel(
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         TextButton(
                             onClick = {
+                                // Read Compose state on the UI thread before dispatching disk I/O.
+                                val requestedQuery = safetyQuery.trim()
+                                val requestedExtension = safetyExtension.trim().takeIf { it.isNotEmpty() }
+                                val requestedMinBytes = safetyMinBytes.toLongOrNull()
+                                val requestedMaxBytes = safetyMaxBytes.toLongOrNull()
+                                safetyResults = "Searching…"
                                 scope.launch {
-                                    runCatching { withContext(Dispatchers.IO) { WorkspaceRecovery.search(
-                                            root,
-                                            WorkspaceSearchOptions(
-                                                query = safetyQuery,
-                                                extension = safetyExtension.trim().takeIf { it.isNotEmpty() },
-                                                minSizeBytes = safetyMinBytes.toLongOrNull(),
-                                                maxSizeBytes = safetyMaxBytes.toLongOrNull(),
-                                            ),
-                                        ) } }
-                                        .onSuccess { hits ->
-                                            safetyResults = if (hits.isEmpty()) "No matching files."
-                                            else hits.joinToString("\n") { "${it.path} · ${it.sizeBytes} bytes" }
-                                        }.onFailure { error -> safetyResults = "Search failed: " + (error.message ?: "unknown error") }
+                                    val result = runCatching {
+                                        withContext(Dispatchers.IO) {
+                                            WorkspaceRecovery.search(
+                                                root,
+                                                WorkspaceSearchOptions(
+                                                    query = requestedQuery,
+                                                    extension = requestedExtension,
+                                                    minSizeBytes = requestedMinBytes,
+                                                    maxSizeBytes = requestedMaxBytes,
+                                                ),
+                                            )
+                                        }
+                                    }
+                                    result.onSuccess { hits ->
+                                        safetyResults = if (hits.isEmpty()) "No matching files."
+                                        else hits.joinToString("\n") { "${it.path} · ${it.sizeBytes} bytes" }
+                                    }.onFailure { error ->
+                                        safetyResults = "Search failed: " + (error.message ?: "unknown error")
+                                    }
                                 }
                             },
-                            modifier = Modifier.testTag("workspace-safety-search"),
-                        ) { Text("Search") }
-                        TextButton(
+                            modifier = Modifier.testTag("workspace-safety-search"),                        TextButton(
                             onClick = {
                                 scope.launch {
                                     runCatching { withContext(Dispatchers.IO) { WorkspaceRecovery.findDuplicates(root) } }
