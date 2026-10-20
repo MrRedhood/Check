@@ -20,6 +20,10 @@ import org.junit.Test
 /**
  * Isolated regression test: long-press -> Metadata -> dialog visible.
  *
+ * NOTE: assertTextContains(value) defaults to substring = false, which requires the node's
+ * text to EQUAL value. The metadata dialog text is multi-line ("Name: ...\nType: ..."), so
+ * every check here passes substring = true.
+ *
  * Path: app/src/androidTest/java/com/astracode/check/WorkspaceMetadataDialogTest.kt
  *
  * It does NOT touch the ZIP editor, so it separates "metadata dialog broken" from
@@ -92,7 +96,7 @@ class WorkspaceMetadataDialogTest {
             composeRule.waitUntil(timeoutMillis = 5_000) {
                 runCatching {
                     composeRule.onNodeWithTag("workspace-metadata-details")
-                        .assertTextContains(expectedName)
+                        .assertTextContains(expectedName, substring = true)
                 }.isSuccess
             }
         } catch (error: Throwable) {
@@ -101,6 +105,7 @@ class WorkspaceMetadataDialogTest {
                     "merged nodes with details tag   = ${count("workspace-metadata-details", unmerged = false)}\n" +
                     "unmerged nodes with details tag = ${count("workspace-metadata-details", unmerged = true)}\n" +
                     "dialog title nodes (unmerged)   = ${countText("File metadata")}\n" +
+                    "details node text = ${detailsText()}\n" +
                     "status = ${statusText()}\n" +
                     dumpAllRoots(),
                 error,
@@ -110,10 +115,10 @@ class WorkspaceMetadataDialogTest {
 
     private fun assertMetadataFields() {
         val details = composeRule.onNodeWithTag("workspace-metadata-details")
-        details.assertTextContains("Created:")
-        details.assertTextContains("Modified:")
-        details.assertTextContains("Format:")
-        details.assertTextContains("Storage path:")
+        details.assertTextContains("Created:", substring = true)
+        details.assertTextContains("Modified:", substring = true)
+        details.assertTextContains("Format:", substring = true)
+        details.assertTextContains("Storage path:", substring = true)
     }
 
     private fun waitFor(stage: String, condition: () -> Boolean) {
@@ -136,6 +141,10 @@ class WorkspaceMetadataDialogTest {
             useUnmergedTree = true,
         ).fetchSemanticsNodes().size
     }.getOrDefault(-1)
+
+    private fun detailsText(): String = runCatching {
+        composeRule.onNodeWithTag("workspace-metadata-details").fetchSemanticsNode().config.toString()
+    }.getOrDefault("No details node.")
 
     private fun statusText(): String = runCatching {
         composeRule.onNodeWithTag("workspace-metadata-status").fetchSemanticsNode().config.toString()

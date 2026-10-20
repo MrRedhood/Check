@@ -283,7 +283,8 @@ class MainActivityUiTest {
         try {
             waitForUiStage("metadata dialog or error message after read") {
                 runCatching {
-                    composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Name: project.zip")
+                    composeRule.onNodeWithTag("workspace-metadata-details")
+                        .assertTextContains("Name: project.zip", substring = true)
                 }.isSuccess || runCatching {
                     composeRule.onNodeWithTag("workspace-message").assertIsDisplayed()
                 }.isSuccess
@@ -295,24 +296,28 @@ class MainActivityUiTest {
             val metadataLoading = runCatching {
                 composeRule.onNodeWithTag("workspace-metadata-loading").fetchSemanticsNode().config.toString()
             }.getOrDefault("No metadata loading tag rendered.")
+            val metadataDetailsNode = runCatching {
+                composeRule.onNodeWithTag("workspace-metadata-details").fetchSemanticsNode().config.toString()
+            }.getOrDefault("No metadata details tag rendered.")
             throw AssertionError(
-                "Metadata dialog or error did not appear. $metadataStatus. $metadataLoading",
+                "Metadata dialog or error did not appear. $metadataStatus. $metadataLoading. $metadataDetailsNode",
                 error,
             )
         }
         if (runCatching {
-                composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Name: project.zip")
+                composeRule.onNodeWithTag("workspace-metadata-details")
+                    .assertTextContains("Name: project.zip", substring = true)
             }.isFailure) {
             val workspaceMessage = runCatching {
                 composeRule.onNodeWithTag("workspace-message").fetchSemanticsNode().config.toString()
             }.getOrDefault("No visible workspace error message.")
             throw AssertionError("Metadata dialog did not open after loading. Workspace message: " + workspaceMessage)
         }
-        composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Name: project.zip")
-        composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Created:")
-        composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Modified:")
-        composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Format: ZIP")
-        composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Storage path:")
+        composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Name: project.zip", substring = true)
+        composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Created:", substring = true)
+        composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Modified:", substring = true)
+        composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Format: ZIP", substring = true)
+        composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Storage path:", substring = true)
         composeRule.onNodeWithTag("workspace-metadata-close").performClick()
 
         composeRule.onNodeWithTag("workspace-entry-project.zip").performTouchInput { longClick() }
