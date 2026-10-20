@@ -2,7 +2,6 @@ package com.astracode.check
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.assertTextContains
@@ -286,8 +285,10 @@ class MainActivityUiTest {
         if (runCatching {
                 composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Name: project.zip")
             }.isFailure) {
-            throw AssertionError("Metadata dialog did not open; visible UI hierarchy:\n" +
-                composeRule.onRoot().printToString())
+            val workspaceMessage = runCatching {
+                composeRule.onNodeWithTag("workspace-message").fetchSemanticsNode().config.toString()
+            }.getOrDefault("No visible workspace error message.")
+            throw AssertionError("Metadata dialog did not open. Workspace message: " + workspaceMessage)
         }
         composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Name: project.zip")
         composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Created:")
