@@ -30,6 +30,7 @@ import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -266,6 +267,9 @@ private fun AtelierFileRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(11.dp),
         ) {
+            if (selectionMode) {
+                Checkbox(checked = selected, onCheckedChange = { onClick() }, modifier = Modifier.testTag("workspace-select-${item.name}"))
+            }
             Box(
                 modifier = Modifier.size(40.dp).clip(RoundedCornerShape(11.dp)).background(
                     if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -281,7 +285,7 @@ private fun AtelierFileRow(
                     imageVector = icon,
                     contentDescription = item.kind,
                     tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(20.dp).testTag("entry-icon-${item.name}"),
                 )
             }
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
