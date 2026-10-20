@@ -21,9 +21,12 @@ import java.util.zip.ZipOutputStream
  */
 internal object WorkspaceArchive {
     private const val BUFFER_SIZE = 64 * 1024
+    private const val MAX_ARCHIVE_BYTES = 32L * 1024L * 1024L
+    private const val MAX_ENTRY_BYTES = 32L * 1024L * 1024L
     private const val MAX_EXTRACTED_ENTRIES = 10_000
-    private const val MAX_EXTRACTED_BYTES = 512L * 1024L * 1024L
+    private const val MAX_EXTRACTED_BYTES = 256L * 1024L * 1024L
     private const val MAX_PATH_DEPTH = 128
+    private const val MAX_PATH_LENGTH = 4096
 
     fun createZip(
         workspaceRoot: File,
@@ -52,7 +55,7 @@ internal object WorkspaceArchive {
         }
         val temporary = File(target.parentFile, ".${target.name}.astracode-tmp-${System.nanoTime()}")
         try {
-            ZipOutputStream(BufferedOutputStream(FileOutputStream(temporary))).use { zip ->
+            ZipOutputStream(BoundedOutputStream(BufferedOutputStream(FileOutputStream(temporary)), MAX_ARCHIVE_BYTES)).use { zip ->
                 val seen = HashSet<String>()
                 var entries = 0
                 fun addFile(file: File, relative: String) {
@@ -68,17 +71,18 @@ internal object WorkspaceArchive {
                             zip.closeEntry()
                             entries++
                         }
-                        if (entries > 100_000) throw IOException("The archive contains too many entries.")
+                        if (entries > MAX_EXTRACTED_ENTRIES) throw IOException("The archive contains too many entries.")
                         val children = file.listFiles()?.sortedBy { it.name }
                             ?: throw IOException("Could not read folder: $relative")
                         children.forEach { child -> addFile(child, "$relative/${child.name}".trimStart('/')) }
                     } else {
+                        if (file.length() > MAX_ENTRY_BYTES) throw IOException("A file exceeds the 32 MiB archive-entry limit: $relative")
                         if (seen.add(relative)) {
                             zip.putNextEntry(ZipEntry(relative))
                             BufferedInputStream(FileInputStream(file)).use { input -> input.copyTo(zip, BUFFER_SIZE) }
                             zip.closeEntry()
                             entries++
-                            if (entries > 100_000) throw IOException("The archive contains too many entries.")
+                            if (entries > MAX_EXTRACTED_ENTRIES) throw IOException("The archive contains too many entries.")
                         }
                     }
                 }
@@ -129,6 +133,7 @@ internal object WorkspaceArchive {
         if (!Files.isRegularFile(archive.toPath(), LinkOption.NOFOLLOW_LINKS)) {
             throw IOException("The ZIP archive is not a regular file.")
         }
+        if (Files.size(archive.toPath()) > MAX_ARCHIVE_BYTES) throw IOException("The ZIP archive exceeds the 32 MiB size limit.")
         val destination = resolve(root, destinationPath)
         if (destination.exists()) throw IOException("Destination already exists: $destinationPath")
         destination.parentFile?.let { parent ->
@@ -155,21 +160,25 @@ internal object WorkspaceArchive {
                         throw SecurityException("A ZIP entry attempted to escape the destination folder.")
                     }
                     if (entry.isDirectory) {
+                        if (output.exists() && !output.isDirectory) throw IOException("The ZIP has a file/folder path conflict: $relative")
                         if (!output.exists() && !output.mkdirs()) throw IOException("Could not create folder: $relative")
                     } else {
+                        if (output.exists()) throw IOException("The ZIP has a conflicting output path: $relative")
                         output.parentFile?.let { parent ->
                             if (!parent.exists() && !parent.mkdirs()) throw IOException("Could not create folder: ${parent.name}")
+                            if (!parent.isDirectory) throw IOException("A ZIP file conflicts with a required parent folder: ${parent.name}")
                         }
+                        var entryBytes = 0L
                         FileOutputStream(output, false).use { stream ->
                             val buffer = ByteArray(BUFFER_SIZE)
                             while (true) {
                                 val count = zip.read(buffer)
                                 if (count < 0) break
                                 if (count == 0) continue
+                                entryBytes += count
                                 totalBytes += count
-                                if (totalBytes > MAX_EXTRACTED_BYTES) {
-                                    throw IOException("The ZIP expands beyond the 512 MB safety limit.")
-                                }
+                                if (entryBytes > MAX_ENTRY_BYTES) throw IOException("An extracted file exceeds the 32 MiB size limit.")
+                                if (totalBytes > MAX_EXTRACTED_BYTES) throw IOException("The ZIP expands beyond the 256 MiB safety limit.")
                                 stream.write(buffer, 0, count)
                             }
                         }
@@ -223,17 +232,37 @@ internal object WorkspaceArchive {
     }
 
     private fun validateEntryName(rawName: String, directory: Boolean): String {
-        if (rawName.isBlank() || rawName.startsWith('/') || rawName.contains('\\') ||
+        if (rawName.isBlank() || rawName.length > MAX_PATH_LENGTH || rawName.startsWith('/') || rawName.contains('\\') ||
             rawName.indexOf('\u0000') >= 0 || Regex("^[A-Za-z]:").containsMatchIn(rawName)) {
             throw SecurityException("The ZIP contains an unsafe path.")
         }
         val path = if (directory) rawName.removeSuffix("/") else rawName
         val parts = path.split('/')
-        if (parts.any { it.isEmpty() || it == "." || it == ".." }) {
+        if (parts.any { it.isEmpty() || it == "." || it == ".." || it.toByteArray(Charsets.UTF_8).size > 255 }) {
             throw SecurityException("The ZIP contains an unsafe path.")
         }
         return parts.joinToString("/")
     }
 
     private fun join(parent: String, child: String): String = if (parent.isBlank()) child else "$parent/$child"
+
+    private class BoundedOutputStream(private val delegate: java.io.OutputStream, private val limit: Long) : java.io.OutputStream() {
+        private var written = 0L
+        override fun write(value: Int) {
+            ensureAvailable(1)
+            delegate.write(value)
+            written++
+        }
+        override fun write(buffer: ByteArray, offset: Int, length: Int) {
+            if (offset < 0 || length < 0 || offset > buffer.size - length) throw IndexOutOfBoundsException()
+            ensureAvailable(length.toLong())
+            delegate.write(buffer, offset, length)
+            written += length
+        }
+        private fun ensureAvailable(additional: Long) {
+            if (additional < 0 || written > limit - additional) throw IOException("The ZIP archive exceeds the 32 MiB size limit.")
+        }
+        override fun flush() = delegate.flush()
+        override fun close() = delegate.close()
+    }
 }

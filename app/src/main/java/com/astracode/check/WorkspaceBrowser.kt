@@ -73,6 +73,7 @@ internal fun WorkspaceBrowserPanel(
     var savedText by remember(root) { mutableStateOf("") }
     var loading by remember(root) { mutableStateOf(false) }
     var message by remember(root) { mutableStateOf("") }
+    var recentTrashId by remember(root) { mutableStateOf<String?>(null) }
     var actionEntry by remember(root) { mutableStateOf<WorkspaceEntry?>(null) }
     var pendingDeleteEntry by remember(root) { mutableStateOf<WorkspaceEntry?>(null) }
     var operationEntry by remember(root) { mutableStateOf<WorkspaceEntry?>(null) }
@@ -102,6 +103,13 @@ internal fun WorkspaceBrowserPanel(
     val externalRoot = remember(root) { File(root.parentFile, "external-workspace") }
     var syncedPaths by remember(root) { mutableStateOf(loadSyncedPaths(context, root)) }
     val scope = rememberCoroutineScope()
+
+    LaunchedEffect(root) {
+        withContext(Dispatchers.IO) {
+            runCatching { WorkspaceRecovery.cleanupExpiredTrash(root) }
+            runCatching { WorkspaceRecovery.cleanupExpiredJournal(root) }
+        }
+    }
 
     LaunchedEffect(root, currentDirectory, refreshKey) {
         try {
@@ -305,7 +313,27 @@ internal fun WorkspaceBrowserPanel(
                 }
             }
 
-            if (message.isNotBlank()) Text(message, modifier = Modifier.testTag("workspace-message"))
+            if (message.isNotBlank()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(message, modifier = Modifier.weight(1f).testTag("workspace-message"))
+                    recentTrashId?.let { trashId ->
+                        TextButton(
+                            onClick = {
+                                scope.launch {
+                                    runCatching { withContext(Dispatchers.IO) { WorkspaceRecovery.restoreFromTrash(root, trashId) } }
+                                        .onSuccess { restoredPath ->
+                                            recentTrashId = null
+                                            refreshKey++
+                                            message = "Restored " + restoredPath
+                                        }
+                                        .onFailure { error -> message = error.message ?: "Could not restore this item." }
+                                }
+                            },
+                            modifier = Modifier.testTag("workspace-undo-delete"),
+                        ) { Text("Undo") }
+                    }
+                }
+            }
         } else if (openedArchiveEntry != null) {
             Column(modifier = Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -349,7 +377,27 @@ internal fun WorkspaceBrowserPanel(
                         TextButton(onClick = { openedArchiveEntry = null; refreshKey++ }) { Text("Close file") }
                     }
                 }
-                if (message.isNotBlank()) Text(message, modifier = Modifier.testTag("workspace-message"))
+                if (message.isNotBlank()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(message, modifier = Modifier.weight(1f).testTag("workspace-message"))
+                    recentTrashId?.let { trashId ->
+                        TextButton(
+                            onClick = {
+                                scope.launch {
+                                    runCatching { withContext(Dispatchers.IO) { WorkspaceRecovery.restoreFromTrash(root, trashId) } }
+                                        .onSuccess { restoredPath ->
+                                            recentTrashId = null
+                                            refreshKey++
+                                            message = "Restored " + restoredPath
+                                        }
+                                        .onFailure { error -> message = error.message ?: "Could not restore this item." }
+                                }
+                            },
+                            modifier = Modifier.testTag("workspace-undo-delete"),
+                        ) { Text("Undo") }
+                    }
+                }
+            }
             }
         } else if (archivePath != null) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -431,7 +479,27 @@ internal fun WorkspaceBrowserPanel(
                     ) { Text("Delete") }
                 }
             }
-            if (message.isNotBlank()) Text(message, modifier = Modifier.testTag("workspace-message"))
+            if (message.isNotBlank()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(message, modifier = Modifier.weight(1f).testTag("workspace-message"))
+                    recentTrashId?.let { trashId ->
+                        TextButton(
+                            onClick = {
+                                scope.launch {
+                                    runCatching { withContext(Dispatchers.IO) { WorkspaceRecovery.restoreFromTrash(root, trashId) } }
+                                        .onSuccess { restoredPath ->
+                                            recentTrashId = null
+                                            refreshKey++
+                                            message = "Restored " + restoredPath
+                                        }
+                                        .onFailure { error -> message = error.message ?: "Could not restore this item." }
+                                }
+                            },
+                            modifier = Modifier.testTag("workspace-undo-delete"),
+                        ) { Text("Undo") }
+                    }
+                }
+            }
             if (archiveEntries.isEmpty() && message.isBlank()) Text("This ZIP folder is empty.", modifier = Modifier.testTag("workspace-zip-empty-folder"))
             LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 items(archiveEntries, key = { it.path }) { item ->
@@ -502,7 +570,27 @@ internal fun WorkspaceBrowserPanel(
                     modifier = Modifier.testTag("workspace-current-folder-count"),
                 )
             }
-            if (message.isNotBlank()) Text(message, modifier = Modifier.testTag("workspace-message"))
+            if (message.isNotBlank()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(message, modifier = Modifier.weight(1f).testTag("workspace-message"))
+                    recentTrashId?.let { trashId ->
+                        TextButton(
+                            onClick = {
+                                scope.launch {
+                                    runCatching { withContext(Dispatchers.IO) { WorkspaceRecovery.restoreFromTrash(root, trashId) } }
+                                        .onSuccess { restoredPath ->
+                                            recentTrashId = null
+                                            refreshKey++
+                                            message = "Restored " + restoredPath
+                                        }
+                                        .onFailure { error -> message = error.message ?: "Could not restore this item." }
+                                }
+                            },
+                            modifier = Modifier.testTag("workspace-undo-delete"),
+                        ) { Text("Undo") }
+                    }
+                }
+            }
             if (entries.isEmpty() && message.isBlank()) Text("This folder is empty.", modifier = Modifier.testTag("workspace-empty-folder"))
             LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 items(entries, key = { it.path }) { entry ->
@@ -788,16 +876,17 @@ internal fun WorkspaceBrowserPanel(
                     scope.launch {
                         val result = runCatching {
                             withContext(Dispatchers.IO) {
-                                val target = resolveWorkspacePath(root, entry.path)
-                                if (!target.deleteRecursively()) throw IOException("Could not delete " + entry.name)
-                                updateSyncedPathsAfterDelete(context, root, externalRoot, syncedPaths, entry.path)
+                                val trash = WorkspaceRecovery.moveToTrash(root, entry.path)
+                                val updated = updateSyncedPathsAfterDelete(context, root, externalRoot, syncedPaths, entry.path)
+                                trash.id to updated
                             }
                         }
-                        result.onSuccess { updatedLinks ->
+                        result.onSuccess { (trashId, updatedLinks) ->
+                            recentTrashId = trashId
                             syncedPaths = updatedLinks
                             pendingDeleteEntry = null
                             refreshKey++
-                            message = "Deleted " + entry.name
+                            message = "Moved " + entry.name + " to Trash. Undo is available."
                         }.onFailure { error ->
                             pendingDeleteEntry = null
                             message = error.message ?: "Could not delete item."
@@ -1223,7 +1312,7 @@ private fun listWorkspaceDirectory(root: File, relativePath: String): List<Works
         throw IOException("Not a folder: " + relativePath.ifEmpty { "." })
     }
     val files = directory.listFiles() ?: throw IOException("Cannot read folder: $relativePath")
-    return files.map { file ->
+    return files.filterNot { it.name == WorkspaceRecovery.TRASH_DIRECTORY || it.name == WorkspaceRecovery.OPERATIONS_DIRECTORY }.map { file ->
         val path = if (relativePath.isEmpty()) file.name else "$relativePath/${file.name}"
         val isDirectory = Files.isDirectory(file.toPath(), LinkOption.NOFOLLOW_LINKS)
         WorkspaceEntry(path, file.name, isDirectory, if (isDirectory) 0L else file.length().coerceAtLeast(0L), file.name.startsWith("."))
@@ -1244,17 +1333,7 @@ private fun writeWorkspaceText(root: File, relativePath: String, text: String) {
     val bytes = text.toByteArray(Charsets.UTF_8)
     if (bytes.size.toLong() > MAX_WORKSPACE_TEXT_BYTES) throw IOException("Files larger than 8 MB are not supported yet.")
     if (file.exists() && !Files.isRegularFile(file.toPath(), LinkOption.NOFOLLOW_LINKS)) throw IOException("Only regular files can be edited.")
-    val temp = File(file.parentFile, ".${file.name}.astracode-tmp")
-    try {
-        temp.writeBytes(bytes)
-        try {
-            Files.move(temp.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-        } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
-            Files.move(temp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
-        }
-    } finally {
-        temp.delete()
-    }
+    WorkspaceRecovery.writeAtomically(root, relativePath, bytes, MAX_WORKSPACE_TEXT_BYTES)
 }
 
 private fun resolveWorkspacePath(root: File, relativePath: String): File {
