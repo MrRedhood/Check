@@ -1060,6 +1060,7 @@ internal fun WorkspaceBrowserPanel(
                                 else -> {
                                     pendingRenamePreview = proposed
                                     safetyResults = "Review the proposed changes below. No files have been renamed yet."
+                                    showSafetyTools = false
                                 }
                             }
                         },
@@ -1136,6 +1137,7 @@ internal fun WorkspaceBrowserPanel(
             onDismissRequest = {
                 pendingRenamePreview = null
                 safetyResults = "Rename cancelled. No files were changed."
+                showSafetyTools = true
             },
             title = { Text("Review batch rename") },
             text = {
@@ -1159,11 +1161,13 @@ internal fun WorkspaceBrowserPanel(
                             }.onSuccess { results ->
                                 pendingRenamePreview = null
                                 safetyRenameDraft = ""
+                                showSafetyTools = true
                                 refreshKey++
                                 safetyResults = "Renamed ${results.size} item(s):\n" +
                                     results.joinToString("\n") { "${it.from} → ${it.to}" }
                             }.onFailure { error ->
                                 pendingRenamePreview = null
+                                showSafetyTools = true
                                 safetyResults = "Batch rename failed before any unsafe overwrite: " +
                                     (error.message ?: "unknown error")
                             }
@@ -1177,6 +1181,7 @@ internal fun WorkspaceBrowserPanel(
                     onClick = {
                         pendingRenamePreview = null
                         safetyResults = "Rename cancelled. No files were changed."
+                        showSafetyTools = true
                     },
                     modifier = Modifier.testTag("workspace-batch-rename-cancel"),
                 ) { Text("Cancel") }
