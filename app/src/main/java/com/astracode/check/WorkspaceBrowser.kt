@@ -1,6 +1,8 @@
 package com.astracode.check
 
+import android.graphics.BitmapFactory
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -8,9 +10,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.ArrowBack
@@ -34,6 +39,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
@@ -74,6 +80,13 @@ internal fun WorkspaceBrowserPanel(
     var loading by remember(root) { mutableStateOf(false) }
     var message by remember(root) { mutableStateOf("") }
     var recentTrashId by remember(root) { mutableStateOf<String?>(null) }
+    var showSafetyTools by remember(root) { mutableStateOf(false) }
+    var safetyQuery by remember(root) { mutableStateOf("") }
+    var safetyRenameDraft by remember(root) { mutableStateOf("") }
+    var safetyRestoreDestination by remember(root) { mutableStateOf("") }
+    var safetyResults by remember(root) { mutableStateOf("") }
+    var safetyTrashItems by remember(root) { mutableStateOf(emptyList<WorkspaceTrashItem>()) }
+    var previewResult by remember(root) { mutableStateOf<WorkspacePreview?>(null) }
     var actionEntry by remember(root) { mutableStateOf<WorkspaceEntry?>(null) }
     var pendingDeleteEntry by remember(root) { mutableStateOf<WorkspaceEntry?>(null) }
     var operationEntry by remember(root) { mutableStateOf<WorkspaceEntry?>(null) }
@@ -231,6 +244,19 @@ internal fun WorkspaceBrowserPanel(
                     },
                     modifier = Modifier.testTag("workspace-toggle-selection"),
                 ) { Text(if (selectionMode) "Cancel selection" else "Select") }
+            }
+            if (openedFile == null && openedArchiveEntry == null && archivePath == null) {
+                TextButton(
+                    onClick = {
+                        showSafetyTools = true
+                        scope.launch {
+                            runCatching { withContext(Dispatchers.IO) { WorkspaceRecovery.listTrash(root) } }
+                                .onSuccess { safetyTrashItems = it }
+                                .onFailure { error -> safetyResults = error.message ?: "Could not load Trash." }
+                        }
+                    },
+                    modifier = Modifier.testTag("workspace-safety-tools"),
+                ) { Text("File safety") }
             }
             TextButton(onClick = onClose, modifier = Modifier.testTag("close-workspace-browser")) { Text("Close") }
         }
@@ -806,6 +832,190 @@ internal fun WorkspaceBrowserPanel(
         )
     }
 
+    if (showSafetyTools) {
+        AlertDialog(
+            onDismissRequest = { showSafetyTools = false },
+            title = { Text("File safety tools") },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 500.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text("Search the workspace by path or filename.")
+                    OutlinedTextField(
+                        value = safetyQuery,
+                        onValueChange = { safetyQuery = it },
+                        label = { Text("Search text") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("workspace-safety-search-input"),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        TextButton(
+                            onClick = {
+                                scope.launch {
+                                    runCatching { withContext(Dispatchers.IO) { WorkspaceRecovery.search(root, WorkspaceSearchOptions(query = safetyQuery)) } }
+                                        .onSuccess { hits ->
+                                            safetyResults = if (hits.isEmpty()) "No matching files."
+                                            else hits.joinToString("\n") { "${it.path} · ${it.sizeBytes} bytes" }
+                                        }.onFailure { error -> safetyResults = "Search failed: " + (error.message ?: "unknown error") }
+                                }
+                            },
+                            modifier = Modifier.testTag("workspace-safety-search"),
+                        ) { Text("Search") }
+                        TextButton(
+                            onClick = {
+                                scope.launch {
+                                    runCatching { withContext(Dispatchers.IO) { WorkspaceRecovery.findDuplicates(root) } }
+                                        .onSuccess { groups ->
+                                            safetyResults = if (groups.isEmpty()) "No exact duplicates found."
+                                            else groups.joinToString("\n\n") { group ->
+                                                "SHA-256 ${group.sha256}\n${group.sizeBytes} bytes\n" + group.paths.joinToString("\n")
+                                            }
+                                        }.onFailure { error -> safetyResults = "Duplicate scan failed: " + (error.message ?: "unknown error") }
+                                }
+                            },
+                            modifier = Modifier.testTag("workspace-safety-duplicates"),
+                        ) { Text("Find duplicates") }
+                    }
+                    TextButton(
+                        onClick = {
+                            scope.launch {
+                                runCatching { withContext(Dispatchers.IO) { WorkspaceRecovery.storageReport(root) } }
+                                    .onSuccess { report ->
+                                        safetyResults = "Workspace size: ${report.totalBytes} bytes\nFiles: ${report.fileCount}\nFolders: ${report.directoryCount}\nLargest files:\n" +
+                                            report.largestFiles.joinToString("\n") { "${it.first} · ${it.second} bytes" } +
+                                            "\nAvailable disk space: ${report.usableBytes} bytes"
+                                    }.onFailure { error -> safetyResults = "Storage scan failed: " + (error.message ?: "unknown error") }
+                            }
+                        },
+                        modifier = Modifier.testTag("workspace-safety-health"),
+                    ) { Text("Storage health") }
+
+                    Divider()
+                    Text("Batch rename for the current folder. Enter one mapping per line: old-name=new-name.")
+                    OutlinedTextField(
+                        value = safetyRenameDraft,
+                        onValueChange = { safetyRenameDraft = it },
+                        label = { Text("Rename mappings") },
+                        modifier = Modifier.fillMaxWidth().testTag("workspace-batch-rename-input"),
+                    )
+                    TextButton(
+                        onClick = {
+                            val lines = safetyRenameDraft.lines().filter { it.isNotBlank() }
+                            val pairs = lines.mapNotNull { line ->
+                                val separator = line.indexOf('=')
+                                if (separator <= 0 || separator == line.lastIndex) null
+                                else line.substring(0, separator).trim() to line.substring(separator + 1).trim()
+                            }
+                            val proposed = pairs.toMap()
+                            if (proposed.size != lines.size) {
+                                safetyResults = "Each rename must be a unique old-name=new-name line."
+                            } else {
+                                scope.launch {
+                                    runCatching { withContext(Dispatchers.IO) { WorkspaceRecovery.batchRename(root, currentDirectory, proposed) } }
+                                        .onSuccess { results ->
+                                            safetyRenameDraft = ""
+                                            refreshKey++
+                                            safetyResults = "Renamed ${results.size} item(s):\n" +
+                                                results.joinToString("\n") { "${it.from} → ${it.to}" }
+                                        }.onFailure { error -> safetyResults = "Batch rename failed: " + (error.message ?: "unknown error") }
+                                }
+                            }
+                        },
+                        modifier = Modifier.testTag("workspace-batch-rename"),
+                    ) { Text("Validate and rename") }
+
+                    Divider()
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Trash · ${safetyTrashItems.size} item(s)", modifier = Modifier.weight(1f))
+                        TextButton(
+                            onClick = {
+                                scope.launch {
+                                    runCatching { withContext(Dispatchers.IO) { WorkspaceRecovery.listTrash(root) } }
+                                        .onSuccess { safetyTrashItems = it }
+                                        .onFailure { error -> safetyResults = "Could not load Trash: " + (error.message ?: "unknown error") }
+                                }
+                            },
+                            modifier = Modifier.testTag("workspace-refresh-trash"),
+                        ) { Text("Refresh") }
+                    }
+                    OutlinedTextField(
+                        value = safetyRestoreDestination,
+                        onValueChange = { safetyRestoreDestination = it },
+                        label = { Text("Alternate restore path (optional)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("workspace-restore-destination"),
+                    )
+                    if (safetyTrashItems.isEmpty()) {
+                        Text("Trash is empty.")
+                    } else {
+                        safetyTrashItems.forEach { item ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(item.originalPath, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    Text("Deleted ${java.time.Instant.ofEpochMilli(item.deletedAtMillis)}", style = MaterialTheme.typography.bodySmall)
+                                }
+                                TextButton(
+                                    onClick = {
+                                        val alternatePath = safetyRestoreDestination.trim().takeIf { it.isNotEmpty() }
+                                        scope.launch {
+                                            runCatching {
+                                                withContext(Dispatchers.IO) {
+                                                    WorkspaceRecovery.restoreFromTrash(root, item.id, alternatePath)
+                                                }
+                                            }.onSuccess { restoredPath ->
+                                                safetyRestoreDestination = ""
+                                                refreshKey++
+                                                safetyTrashItems = withContext(Dispatchers.IO) { WorkspaceRecovery.listTrash(root) }
+                                                message = "Restored ${restoredPath}"
+                                                safetyResults = message
+                                            }.onFailure { error ->
+                                                safetyResults = "Restore failed: " + (error.message ?: "unknown error") +
+                                                    ". Choose an alternate path if the original path is occupied."
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.testTag("workspace-trash-restore-${item.id}"),
+                                ) { Text("Restore") }
+                            }
+                        }
+                    }
+                    if (safetyResults.isNotBlank()) Text(safetyResults, modifier = Modifier.testTag("workspace-safety-results"))
+                }
+            },
+            confirmButton = { TextButton(onClick = { showSafetyTools = false }) { Text("Close") } },
+        )
+    }
+
+    previewResult?.let { preview ->
+        val bitmap = remember(preview.imageBytes) {
+            preview.imageBytes?.let { bytes ->
+                runCatching { BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap() }.getOrNull()
+            }
+        }
+        AlertDialog(
+            onDismissRequest = { previewResult = null },
+            title = { Text("Read-only preview · ${preview.path}") },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth().heightIn(max = 400.dp).verticalScroll(rememberScrollState())) {
+                    Text(preview.message, style = MaterialTheme.typography.bodySmall)
+                    if (preview.text != null) {
+                        val content = if (preview.text.length > 30000) preview.text.take(30000) + "\n\n[Preview clipped at 30,000 characters]" else preview.text
+                        Text(content)
+                    }
+                    if (preview.imageBytes != null) {
+                        if (bitmap != null) {
+                            Image(bitmap = bitmap, contentDescription = "Read-only image preview", modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp))
+                        } else {
+                            Text("The bytes could not be decoded as an image.")
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { previewResult = null }, modifier = Modifier.testTag("workspace-preview-close")) { Text("Close") } },
+        )
+    }
+
     metadataDetails?.let { details ->
         AlertDialog(
             onDismissRequest = { metadataDetails = null },
@@ -853,6 +1063,19 @@ internal fun WorkspaceBrowserPanel(
                     },
                     modifier = Modifier.fillMaxWidth().testTag("workspace-action-metadata"),
                 ) { Text("Metadata") }
+                if (!entry.isDirectory && !entry.name.endsWith(".zip", ignoreCase = true)) {
+                    TextButton(
+                        onClick = {
+                            actionEntry = null
+                            scope.launch {
+                                runCatching { withContext(Dispatchers.IO) { WorkspaceRecovery.preview(root, entry.path) } }
+                                    .onSuccess { previewResult = it }
+                                    .onFailure { error -> message = error.message ?: "Could not preview this file." }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().testTag("workspace-action-preview"),
+                    ) { Text("Preview (read-only)") }
+                }
                 TextButton(onClick = { syncEntry = entry; actionEntry = null },
                     modifier = Modifier.fillMaxWidth().testTag("workspace-action-sync")) { Text("Sync") }
                 TextButton(onClick = { operationEntry = entry; operationKind = "rename"; operationInput = entry.name; actionEntry = null },
@@ -1063,12 +1286,10 @@ internal fun WorkspaceBrowserPanel(
                                         }
                                         else -> {
                                             paths.sortedByDescending { it.count { ch -> ch == '/' } }.forEach { path ->
-                                                val target = resolveWorkspacePath(root, path)
-                                                if (!target.exists()) throw IOException("Selected item no longer exists: $path")
-                                                if (!target.deleteRecursively()) throw IOException("Could not delete $path")
+                                                WorkspaceRecovery.moveToTrash(root, path)
                                                 links = updateSyncedPathsAfterDelete(context, root, externalRoot, links, path)
                                             }
-                                            "Deleted ${paths.size} item(s)"
+                                            "Moved ${paths.size} item(s) to Trash"
                                         }
                                     }
                                     links to summary

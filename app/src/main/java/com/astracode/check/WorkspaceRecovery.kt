@@ -22,7 +22,15 @@ import java.util.UUID
 import java.util.concurrent.CancellationException
 
 internal data class WorkspaceTrashItem(val id: String, val originalPath: String, val deletedAtMillis: Long)
-internal data class WorkspacePreview(val path: String, val byteCount: Long, val text: String?, val supported: Boolean, val message: String)
+internal data class WorkspacePreview(
+    val path: String,
+    val byteCount: Long,
+    val text: String?,
+    val supported: Boolean,
+    val message: String,
+    val imageBytes: ByteArray? = null,
+    val mimeType: String? = null,
+)
 internal data class WorkspaceSearchOptions(
     val query: String = "", val extension: String? = null, val minSizeBytes: Long? = null,
     val maxSizeBytes: Long? = null, val modifiedAfterMillis: Long? = null,
@@ -335,10 +343,14 @@ internal object WorkspaceRecovery {
         if (!Files.isRegularFile(file.toPath(), LinkOption.NOFOLLOW_LINKS)) throw IOException("Preview supports regular files only.")
         val size = Files.size(file.toPath())
         if (size > maxBytes) return WorkspacePreview(relativePath, size, null, false, "File exceeds the read-only preview size limit.")
-        if (file.name.substringAfterLast('.', "").lowercase(Locale.ROOT) !in textExtensions) {
-            return WorkspacePreview(relativePath, size, null, false, "This file type is not available as text preview. The original was not changed or executed.")
-        }
         val bytes = Files.readAllBytes(file.toPath())
+        val extension = file.name.substringAfterLast('.', "").lowercase(Locale.ROOT)
+        imageMimeTypes[extension]?.let { mime ->
+            return WorkspacePreview(relativePath, size, null, true, "Read-only image preview; the original was not changed or executed.", bytes, mime)
+        }
+        if (extension !in textExtensions) {
+            return WorkspacePreview(relativePath, size, null, false, "This file type is not available as preview. The original was not changed or executed.")
+        }
         if (bytes.any { it == 0.toByte() }) return WorkspacePreview(relativePath, size, null, false, "Binary content is not shown as text.")
         val text = try {
             StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
