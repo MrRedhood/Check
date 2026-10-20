@@ -274,7 +274,7 @@ class MainActivityUiTest {
         waitForUiStage("workspace ZIP row") {
             runCatching { composeRule.onNodeWithTag("workspace-entry-project.zip").assertIsDisplayed() }.isSuccess
         }
-        composeRule.onNodeWithTag("workspace-entry-icon-project.zip").assertIsDisplayed()
+        composeRule.onNodeWithTag("workspace-entry-icon-project.zip", useUnmergedTree = true).assertIsDisplayed()
 
         composeRule.onNodeWithTag("workspace-entry-project.zip").performTouchInput { longClick() }
         composeRule.onNodeWithTag("workspace-action-metadata").performClick()
