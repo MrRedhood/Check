@@ -975,7 +975,9 @@ internal fun WorkspaceBrowserPanel(
                                     }
                                 }
                             },
-                            modifier = Modifier.testTag("workspace-safety-search"),                        TextButton(
+                            modifier = Modifier.testTag("workspace-safety-search"),
+                        ) { Text("Search") }
+                        TextButton(
                             onClick = {
                                 scope.launch {
                                     runCatching { withContext(Dispatchers.IO) { WorkspaceRecovery.findDuplicates(root) } }
