@@ -118,7 +118,7 @@ internal object WorkspaceRecovery {
             if (source == canonicalRoot || Files.isSymbolicLink(source.toPath())) throw SecurityException("This item cannot be moved to Trash.")
             val itemsRoot = File(File(canonicalRoot, TRASH_DIRECTORY), "items")
             if (!itemsRoot.exists() && !itemsRoot.mkdirs()) throw IOException("Could not create the recovery area.")
-            val id = "$nowMillis-@@{UUID.randomUUID()}"
+            val id = "$nowMillis-${UUID.randomUUID()}"
             val itemDir = File(itemsRoot, id)
             if (!itemDir.mkdir()) throw IOException("Could not create a Trash record.")
             val payload = File(itemDir, "payload")
@@ -228,9 +228,9 @@ internal object WorkspaceRecovery {
         runCatching {
             val dir = File(File(root.canonicalFile, OPERATIONS_DIRECTORY), "journal")
             if (!dir.exists() && !dir.mkdirs()) return@runCatching
-            val id = "@@{System.currentTimeMillis()}-@@{UUID.randomUUID()}"
+            val id = "${System.currentTimeMillis()}-${UUID.randomUUID()}"
             val encodedPaths = paths.joinToString("\n") { Base64.getUrlEncoder().withoutPadding().encodeToString(it.toByteArray(Charsets.UTF_8)) }
-            val bytes = "operation=$operation\nstatus=$status\ntime=@@{System.currentTimeMillis()}\npaths=$encodedPaths\n".toByteArray(Charsets.UTF_8)
+            val bytes = "operation=$operation\nstatus=$status\ntime=${System.currentTimeMillis()}\npaths=$encodedPaths\n".toByteArray(Charsets.UTF_8)
             FileOutputStream(File(dir, "$id.entry")).use { it.write(bytes); it.fd.sync() }
         }
     }
@@ -429,7 +429,7 @@ internal object WorkspaceRecovery {
             val completed = mutableListOf<Pair<String, String>>()
             try {
                 proposedNames.keys.forEachIndexed { index, old ->
-                    val temporary = File(directory, ".astracode-rename-@@{UUID.randomUUID()}-$index")
+                    val temporary = File(directory, ".astracode-rename-${UUID.randomUUID()}-$index")
                     Files.move(resolve(root, join(directoryPath, old)).toPath(), temporary.toPath())
                     staged[old] = temporary
                 }
@@ -499,7 +499,7 @@ internal object WorkspaceRecovery {
         while (current != null && current != root && !current.exists()) { missing += current; current = current.parentFile }
         if (current == null || (current != root && !current.path.startsWith(root.path + File.separator))) throw SecurityException("Destination parent escapes the workspace.")
         missing.asReversed().forEach {
-            if (!it.mkdir() && !it.isDirectory) throw IOException("Could not create folder: @@{it.name}")
+            if (!it.mkdir() && !it.isDirectory) throw IOException("Could not create folder: ${it.name}")
             if (Files.isSymbolicLink(it.toPath())) throw SecurityException("Symbolic links are not supported.")
         }
     }

@@ -93,7 +93,7 @@ class WorkspaceRecoveryTest {
         val root = Files.createTempDirectory("check-operation-journal").toFile()
         try {
             WorkspaceRecovery.recordOperation(root, "copy-verified", listOf("secret-name.txt"), "success")
-            val journal = File(root, "@@{WorkspaceRecovery.OPERATIONS_DIRECTORY}/journal")
+            val journal = File(root, "${WorkspaceRecovery.OPERATIONS_DIRECTORY}/journal")
             val entry = journal.listFiles()?.singleOrNull()
             assertNotNull(entry)
             assertFalse(entry!!.readText().contains("secret contents"))
