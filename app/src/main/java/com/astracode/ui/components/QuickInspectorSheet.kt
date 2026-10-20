@@ -101,7 +101,7 @@ fun QuickInspectorSheet(
                 Text(if (item.isDirectory) "Open folder" else "Open item")
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                ActionButton("Create ZIP", onCreateZip, Modifier.weight(1f), Icons.Outlined.Archive)
+                ActionButton("Move into ZIP", onCreateZip, Modifier.weight(1f), Icons.Outlined.Archive)
                 ActionButton("Rename", onRename, Modifier.weight(1f), Icons.Outlined.DriveFileRenameOutline)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
