@@ -79,7 +79,11 @@ internal fun WorkspaceBrowserPanel(
     var savedText by remember(root) { mutableStateOf("") }
     var loading by remember(root) { mutableStateOf(false) }
     var message by remember(root) { mutableStateOf("") }
-    var recentTrashId by remember(root) { mutableStateOf<String?>(null) }
+    var recentTrashIds by remember(root) { mutableStateOf(emptyList<String>()) }
+    var pendingRenamePreview by remember(root) { mutableStateOf<Map<String, String>?>(null) }
+    var safetyExtension by remember(root) { mutableStateOf("") }
+    var safetyMinBytes by remember(root) { mutableStateOf("") }
+    var safetyMaxBytes by remember(root) { mutableStateOf("") }
     var showSafetyTools by remember(root) { mutableStateOf(false) }
     var safetyQuery by remember(root) { mutableStateOf("") }
     var safetyRenameDraft by remember(root) { mutableStateOf("") }
@@ -342,17 +346,34 @@ internal fun WorkspaceBrowserPanel(
             if (message.isNotBlank()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(message, modifier = Modifier.weight(1f).testTag("workspace-message"))
-                    recentTrashId?.let { trashId ->
+                    if (recentTrashIds.isNotEmpty()) {
                         TextButton(
                             onClick = {
                                 scope.launch {
-                                    runCatching { withContext(Dispatchers.IO) { WorkspaceRecovery.restoreFromTrash(root, trashId) } }
-                                        .onSuccess { restoredPath ->
-                                            recentTrashId = null
-                                            refreshKey++
-                                            message = "Restored " + restoredPath
-                                        }
-                                        .onFailure { error -> message = error.message ?: "Could not restore this item." }
+                                    var restored = 0
+                                    val remaining = mutableListOf<String>()
+                                    recentTrashIds.asReversed().forEach { trashId ->
+                                        runCatching { withContext(Dispatchers.IO) { WorkspaceRecovery.restoreFromTrash(root, trashId) } }
+                                            .onSuccess { restoredPath ->
+                                                restored++
+                                                runCatching {
+                                                    withContext(Dispatchers.IO) {
+                                                        syncLinkedWorkspacePaths(root, externalRoot, syncedPaths, restoredPath)
+                                                    }
+                                                }
+                                            }
+                                            .onFailure { remaining += trashId }
+                                    }
+                                    recentTrashIds = remaining
+                                    safetyTrashItems = withContext(Dispatchers.IO) {
+                                        runCatching { WorkspaceRecovery.listTrash(root) }.getOrDefault(emptyList())
+                                    }
+                                    refreshKey++
+                                    message = if (remaining.isEmpty()) {
+                                        "Restored $restored item(s)."
+                                    } else {
+                                        "Restored $restored item(s); ${remaining.size} item(s) remain in Trash. Choose an alternate path in File safety if needed."
+                                    }
                                 }
                             },
                             modifier = Modifier.testTag("workspace-undo-delete"),
@@ -406,17 +427,34 @@ internal fun WorkspaceBrowserPanel(
                 if (message.isNotBlank()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(message, modifier = Modifier.weight(1f).testTag("workspace-message"))
-                    recentTrashId?.let { trashId ->
+                    if (recentTrashIds.isNotEmpty()) {
                         TextButton(
                             onClick = {
                                 scope.launch {
-                                    runCatching { withContext(Dispatchers.IO) { WorkspaceRecovery.restoreFromTrash(root, trashId) } }
-                                        .onSuccess { restoredPath ->
-                                            recentTrashId = null
-                                            refreshKey++
-                                            message = "Restored " + restoredPath
-                                        }
-                                        .onFailure { error -> message = error.message ?: "Could not restore this item." }
+                                    var restored = 0
+                                    val remaining = mutableListOf<String>()
+                                    recentTrashIds.asReversed().forEach { trashId ->
+                                        runCatching { withContext(Dispatchers.IO) { WorkspaceRecovery.restoreFromTrash(root, trashId) } }
+                                            .onSuccess { restoredPath ->
+                                                restored++
+                                                runCatching {
+                                                    withContext(Dispatchers.IO) {
+                                                        syncLinkedWorkspacePaths(root, externalRoot, syncedPaths, restoredPath)
+                                                    }
+                                                }
+                                            }
+                                            .onFailure { remaining += trashId }
+                                    }
+                                    recentTrashIds = remaining
+                                    safetyTrashItems = withContext(Dispatchers.IO) {
+                                        runCatching { WorkspaceRecovery.listTrash(root) }.getOrDefault(emptyList())
+                                    }
+                                    refreshKey++
+                                    message = if (remaining.isEmpty()) {
+                                        "Restored $restored item(s)."
+                                    } else {
+                                        "Restored $restored item(s); ${remaining.size} item(s) remain in Trash. Choose an alternate path in File safety if needed."
+                                    }
                                 }
                             },
                             modifier = Modifier.testTag("workspace-undo-delete"),
@@ -508,17 +546,34 @@ internal fun WorkspaceBrowserPanel(
             if (message.isNotBlank()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(message, modifier = Modifier.weight(1f).testTag("workspace-message"))
-                    recentTrashId?.let { trashId ->
+                    if (recentTrashIds.isNotEmpty()) {
                         TextButton(
                             onClick = {
                                 scope.launch {
-                                    runCatching { withContext(Dispatchers.IO) { WorkspaceRecovery.restoreFromTrash(root, trashId) } }
-                                        .onSuccess { restoredPath ->
-                                            recentTrashId = null
-                                            refreshKey++
-                                            message = "Restored " + restoredPath
-                                        }
-                                        .onFailure { error -> message = error.message ?: "Could not restore this item." }
+                                    var restored = 0
+                                    val remaining = mutableListOf<String>()
+                                    recentTrashIds.asReversed().forEach { trashId ->
+                                        runCatching { withContext(Dispatchers.IO) { WorkspaceRecovery.restoreFromTrash(root, trashId) } }
+                                            .onSuccess { restoredPath ->
+                                                restored++
+                                                runCatching {
+                                                    withContext(Dispatchers.IO) {
+                                                        syncLinkedWorkspacePaths(root, externalRoot, syncedPaths, restoredPath)
+                                                    }
+                                                }
+                                            }
+                                            .onFailure { remaining += trashId }
+                                    }
+                                    recentTrashIds = remaining
+                                    safetyTrashItems = withContext(Dispatchers.IO) {
+                                        runCatching { WorkspaceRecovery.listTrash(root) }.getOrDefault(emptyList())
+                                    }
+                                    refreshKey++
+                                    message = if (remaining.isEmpty()) {
+                                        "Restored $restored item(s)."
+                                    } else {
+                                        "Restored $restored item(s); ${remaining.size} item(s) remain in Trash. Choose an alternate path in File safety if needed."
+                                    }
                                 }
                             },
                             modifier = Modifier.testTag("workspace-undo-delete"),
@@ -599,17 +654,34 @@ internal fun WorkspaceBrowserPanel(
             if (message.isNotBlank()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(message, modifier = Modifier.weight(1f).testTag("workspace-message"))
-                    recentTrashId?.let { trashId ->
+                    if (recentTrashIds.isNotEmpty()) {
                         TextButton(
                             onClick = {
                                 scope.launch {
-                                    runCatching { withContext(Dispatchers.IO) { WorkspaceRecovery.restoreFromTrash(root, trashId) } }
-                                        .onSuccess { restoredPath ->
-                                            recentTrashId = null
-                                            refreshKey++
-                                            message = "Restored " + restoredPath
-                                        }
-                                        .onFailure { error -> message = error.message ?: "Could not restore this item." }
+                                    var restored = 0
+                                    val remaining = mutableListOf<String>()
+                                    recentTrashIds.asReversed().forEach { trashId ->
+                                        runCatching { withContext(Dispatchers.IO) { WorkspaceRecovery.restoreFromTrash(root, trashId) } }
+                                            .onSuccess { restoredPath ->
+                                                restored++
+                                                runCatching {
+                                                    withContext(Dispatchers.IO) {
+                                                        syncLinkedWorkspacePaths(root, externalRoot, syncedPaths, restoredPath)
+                                                    }
+                                                }
+                                            }
+                                            .onFailure { remaining += trashId }
+                                    }
+                                    recentTrashIds = remaining
+                                    safetyTrashItems = withContext(Dispatchers.IO) {
+                                        runCatching { WorkspaceRecovery.listTrash(root) }.getOrDefault(emptyList())
+                                    }
+                                    refreshKey++
+                                    message = if (remaining.isEmpty()) {
+                                        "Restored $restored item(s)."
+                                    } else {
+                                        "Restored $restored item(s); ${remaining.size} item(s) remain in Trash. Choose an alternate path in File safety if needed."
+                                    }
                                 }
                             },
                             modifier = Modifier.testTag("workspace-undo-delete"),
@@ -849,11 +921,42 @@ internal fun WorkspaceBrowserPanel(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth().testTag("workspace-safety-search-input"),
                     )
+                    OutlinedTextField(
+                        value = safetyExtension,
+                        onValueChange = { safetyExtension = it },
+                        label = { Text("Extension (optional)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("workspace-safety-extension"),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = safetyMinBytes,
+                            onValueChange = { safetyMinBytes = it.filter(Char::isDigit) },
+                            label = { Text("Min bytes") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f).testTag("workspace-safety-min-bytes"),
+                        )
+                        OutlinedTextField(
+                            value = safetyMaxBytes,
+                            onValueChange = { safetyMaxBytes = it.filter(Char::isDigit) },
+                            label = { Text("Max bytes") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f).testTag("workspace-safety-max-bytes"),
+                        )
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         TextButton(
                             onClick = {
                                 scope.launch {
-                                    runCatching { withContext(Dispatchers.IO) { WorkspaceRecovery.search(root, WorkspaceSearchOptions(query = safetyQuery)) } }
+                                    runCatching { withContext(Dispatchers.IO) { WorkspaceRecovery.search(
+                                            root,
+                                            WorkspaceSearchOptions(
+                                                query = safetyQuery,
+                                                extension = safetyExtension.trim().takeIf { it.isNotEmpty() },
+                                                minSizeBytes = safetyMinBytes.toLongOrNull(),
+                                                maxSizeBytes = safetyMaxBytes.toLongOrNull(),
+                                            ),
+                                        ) } }
                                         .onSuccess { hits ->
                                             safetyResults = if (hits.isEmpty()) "No matching files."
                                             else hits.joinToString("\n") { "${it.path} · ${it.sizeBytes} bytes" }
@@ -908,22 +1011,80 @@ internal fun WorkspaceBrowserPanel(
                                 else line.substring(0, separator).trim() to line.substring(separator + 1).trim()
                             }
                             val proposed = pairs.toMap()
-                            if (proposed.size != lines.size) {
-                                safetyResults = "Each rename must be a unique old-name=new-name line."
-                            } else {
-                                scope.launch {
-                                    runCatching { withContext(Dispatchers.IO) { WorkspaceRecovery.batchRename(root, currentDirectory, proposed) } }
-                                        .onSuccess { results ->
-                                            safetyRenameDraft = ""
-                                            refreshKey++
-                                            safetyResults = "Renamed ${results.size} item(s):\n" +
-                                                results.joinToString("\n") { "${it.from} → ${it.to}" }
-                                        }.onFailure { error -> safetyResults = "Batch rename failed: " + (error.message ?: "unknown error") }
+                            val currentNames = runCatching { listWorkspaceDirectory(root, currentDirectory).map { it.name } }
+                                .getOrElse {
+                                    safetyResults = "Could not list the current folder: " + (it.message ?: "unknown error")
+                                    emptyList()
+                                }
+                            val invalidName = proposed.any { (old, new) ->
+                                !isSimpleWorkspaceName(old) || !isSimpleWorkspaceName(new)
+                            }
+                            val duplicateTargets = proposed.values.map { it.lowercase() }.distinct().size != proposed.size
+                            val conflictingTarget = proposed.values.any { target ->
+                                currentNames.any { existing -> existing.equals(target, ignoreCase = true) } &&
+                                    proposed.keys.none { source -> source.equals(target, ignoreCase = true) }
+                            }
+                            when {
+                                proposed.isEmpty() || proposed.size != lines.size -> {
+                                    pendingRenamePreview = null
+                                    safetyResults = "Each rename must be a unique old-name=new-name line."
+                                }
+                                invalidName -> {
+                                    pendingRenamePreview = null
+                                    safetyResults = "Use simple file names without path separators or reserved system names."
+                                }
+                                duplicateTargets -> {
+                                    pendingRenamePreview = null
+                                    safetyResults = "Two items cannot be renamed to the same destination."
+                                }
+                                conflictingTarget -> {
+                                    pendingRenamePreview = null
+                                    safetyResults = "One or more destination names already exist. Resolve those conflicts before continuing."
+                                }
+                                else -> {
+                                    pendingRenamePreview = proposed
+                                    safetyResults = "Review the proposed changes below. No files have been renamed yet."
                                 }
                             }
                         },
                         modifier = Modifier.testTag("workspace-batch-rename"),
-                    ) { Text("Validate and rename") }
+                    ) { Text("Preview rename") }
+                    pendingRenamePreview?.let { proposed ->
+                        Text("Review changes:")
+                        proposed.forEach { (old, new) -> Text("$old  →  $new") }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(
+                                onClick = {
+                                    val reviewed = proposed.toMap()
+                                    scope.launch {
+                                        runCatching {
+                                            withContext(Dispatchers.IO) {
+                                                WorkspaceRecovery.batchRename(root, currentDirectory, reviewed)
+                                            }
+                                        }.onSuccess { results ->
+                                            pendingRenamePreview = null
+                                            safetyRenameDraft = ""
+                                            refreshKey++
+                                            safetyResults = "Renamed ${results.size} item(s):\n" +
+                                                results.joinToString("\n") { "${it.from} → ${it.to}" }
+                                        }.onFailure { error ->
+                                            pendingRenamePreview = null
+                                            safetyResults = "Batch rename failed before any unsafe overwrite: " +
+                                                (error.message ?: "unknown error")
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.testTag("workspace-batch-rename-confirm"),
+                            ) { Text("Confirm rename") }
+                            TextButton(
+                                onClick = {
+                                    pendingRenamePreview = null
+                                    safetyResults = "Rename cancelled. No files were changed."
+                                },
+                                modifier = Modifier.testTag("workspace-batch-rename-cancel"),
+                            ) { Text("Cancel") }
+                        }
+                    }
 
                     Divider()
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1105,7 +1266,7 @@ internal fun WorkspaceBrowserPanel(
                             }
                         }
                         result.onSuccess { (trashId, updatedLinks) ->
-                            recentTrashId = trashId
+                            recentTrashIds = listOf(trashId)
                             syncedPaths = updatedLinks
                             pendingDeleteEntry = null
                             refreshKey++
@@ -1233,6 +1394,7 @@ internal fun WorkspaceBrowserPanel(
                         val raw = bulkInput.trim()
                         val paths = selected
                         scope.launch {
+                            val trashedItems = mutableListOf<WorkspaceTrashItem>()
                             val result = runCatching {
                                 withContext(Dispatchers.IO) {
                                     if (paths.isEmpty()) throw IOException("Select at least one item.")
@@ -1286,26 +1448,36 @@ internal fun WorkspaceBrowserPanel(
                                         }
                                         else -> {
                                             paths.sortedByDescending { it.count { ch -> ch == '/' } }.forEach { path ->
-                                                WorkspaceRecovery.moveToTrash(root, path)
+                                                trashedItems += WorkspaceRecovery.moveToTrash(root, path)
                                                 links = updateSyncedPathsAfterDelete(context, root, externalRoot, links, path)
                                             }
                                             "Moved ${paths.size} item(s) to Trash"
                                         }
                                     }
-                                    links to summary
+                                    Triple(links, summary, trashedItems.toList())
                                 }
                             }
-                            result.onSuccess { (links, summary) ->
+                            result.onSuccess { (links, summary, trashRecords) ->
                                 syncedPaths = links
+                                recentTrashIds = trashRecords.map { it.id }
                                 bulkActionKind = null
                                 selectedPaths = emptySet()
                                 selectionMode = false
                                 refreshKey++
-                                message = summary
+                                message = if (trashRecords.isNotEmpty()) "$summary. Undo is available." else summary
                             }.onFailure { error ->
+                                syncedPaths = loadSyncedPaths(context)
+                                recentTrashIds = trashedItems.map { it.id }
                                 bulkActionKind = null
-                                message = error.message ?: "Could not complete the bulk operation."
+                                selectedPaths = emptySet()
+                                selectionMode = false
                                 refreshKey++
+                                message = if (trashedItems.isNotEmpty()) {
+                                    "Partial completion: ${trashedItems.size} item(s) moved to Trash. Undo is available. " +
+                                        (error.message ?: "A later item failed.")
+                                } else {
+                                    error.message ?: "Could not complete the bulk operation."
+                                }
                             }
                         }
                     },
