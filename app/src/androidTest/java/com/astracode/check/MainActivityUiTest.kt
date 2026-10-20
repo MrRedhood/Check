@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.longClick
@@ -343,7 +344,7 @@ class MainActivityUiTest {
 
         composeRule.onNodeWithTag("workspace-batch-rename-input")
             .performTextReplacement("README.txt=README-renamed.txt")
-        composeRule.onNodeWithTag("workspace-batch-rename").performClick()
+        composeRule.onNodeWithTag("workspace-batch-rename").performScrollTo().performClick()
         composeRule.onNodeWithTag("workspace-batch-rename-confirm").assertIsDisplayed()
         assertFalse(File(workspaceRoot, "README-renamed.txt").exists())
         composeRule.onNodeWithTag("workspace-batch-rename-confirm").performClick()
