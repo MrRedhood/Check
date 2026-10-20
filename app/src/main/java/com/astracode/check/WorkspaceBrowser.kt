@@ -724,7 +724,10 @@ internal fun WorkspaceBrowserPanel(
                     scope.launch {
                         runCatching { withContext(Dispatchers.IO) { workspaceMetadataText(root, entry.path) } }
                             .onSuccess { metadataDetails = it; actionEntry = null }
-                            .onFailure { error -> message = error.message ?: "Could not read metadata." }
+                            .onFailure { error ->
+                                actionEntry = null
+                                message = error.message ?: "Could not read metadata."
+                            }
                     }
                 }, modifier = Modifier.fillMaxWidth().testTag("workspace-action-metadata")) { Text("Metadata") }
                 TextButton(onClick = { syncEntry = entry; actionEntry = null },

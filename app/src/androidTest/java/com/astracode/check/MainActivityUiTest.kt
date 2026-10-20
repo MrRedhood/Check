@@ -2,6 +2,7 @@ package com.astracode.check
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.assertTextContains
@@ -278,7 +279,15 @@ class MainActivityUiTest {
         composeRule.waitUntil(timeoutMillis = 5_000) {
             runCatching {
                 composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Name: project.zip")
+            }.isSuccess || runCatching {
+                composeRule.onNodeWithTag("workspace-message").assertIsDisplayed()
             }.isSuccess
+        }
+        if (runCatching {
+                composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Name: project.zip")
+            }.isFailure) {
+            throw AssertionError("Metadata dialog did not open; visible UI hierarchy:\n" +
+                composeRule.onRoot().printToString())
         }
         composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Name: project.zip")
         composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Created:")
