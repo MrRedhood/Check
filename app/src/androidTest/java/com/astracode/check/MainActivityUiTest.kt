@@ -428,7 +428,10 @@ class MainActivityUiTest {
         composeRule.onNodeWithText("Copy").fetchSemanticsNode()
         composeRule.onNodeWithText("Move").fetchSemanticsNode()
         composeRule.onNodeWithText("Sync").fetchSemanticsNode()
-        composeRule.onNodeWithText("Metadata").fetchSemanticsNode()
+        composeRule.onNodeWithText("Format").fetchSemanticsNode()
+        composeRule.onNodeWithText("Created").fetchSemanticsNode()
+        composeRule.onNodeWithText("Modified").fetchSemanticsNode()
+        composeRule.onNodeWithText("Direct children").fetchSemanticsNode()
         composeRule.onNodeWithText("Move to Trash").fetchSemanticsNode()
     }
 
