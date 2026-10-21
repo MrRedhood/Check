@@ -1,8 +1,6 @@
 package com.astracode.check
 
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertDoesNotExist
-import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -406,17 +404,17 @@ class MainActivityUiTest {
         composeRule.onNodeWithTag("bottom-nav-files").performClick()
 
         composeRule.onNodeWithTag("workspace-inspect-src").assertIsDisplayed()
-        composeRule.onNodeWithTag("workspace-entry-options-src").assertDoesNotExist()
+        assertTrue(runCatching { composeRule.onNodeWithTag("workspace-entry-options-src").assertIsDisplayed() }.isFailure)
 
         composeRule.onNodeWithTag("entry-src").performTouchInput { longClick() }
-        composeRule.onNodeWithText("QUICK INSPECTOR").assertDoesNotExist()
+        assertTrue(runCatching { composeRule.onNodeWithText("QUICK INSPECTOR").assertIsDisplayed() }.isFailure)
 
         composeRule.onNodeWithTag("workspace-inspect-src").performClick()
         composeRule.onNodeWithText("QUICK INSPECTOR").assertIsDisplayed()
-        composeRule.onNodeWithText("Rename").assertExists()
-        composeRule.onNodeWithText("Copy").assertExists()
-        composeRule.onNodeWithText("Move").assertExists()
-        composeRule.onNodeWithText("Move to Trash").assertExists()
+        composeRule.onNodeWithText("Rename").assertIsDisplayed()
+        composeRule.onNodeWithText("Copy").assertIsDisplayed()
+        composeRule.onNodeWithText("Move").assertIsDisplayed()
+        composeRule.onNodeWithText("Move to Trash").assertIsDisplayed()
     }
 
     private fun waitForUiStage(stage: String, timeoutMillis: Long = 5_000, condition: () -> Boolean) {
