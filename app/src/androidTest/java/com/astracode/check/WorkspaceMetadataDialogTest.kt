@@ -77,6 +77,9 @@ class WorkspaceMetadataDialogTest {
         val created = File(workspaceRoot, "my file (1).txt")
         composeRule.waitUntil(timeoutMillis = 5_000) { created.isFile }
         assertEquals("my file (1).txt", created.name)
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-editor-back").assertIsDisplayed() }.isSuccess
+        }
         composeRule.onNodeWithTag("workspace-editor-back").performClick()
         requestMetadata("workspace-entry-my file (1).txt")
         awaitMetadataDialog("Format: txt file (text file)")
