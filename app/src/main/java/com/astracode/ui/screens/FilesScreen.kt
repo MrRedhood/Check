@@ -1,8 +1,7 @@
 package com.astracode.ui.screens
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,7 +25,6 @@ import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -72,7 +70,6 @@ fun FilesScreen(
     onToggleSelection: (String) -> Unit,
     onBulkAction: (String) -> Unit,
     onOpenEntry: (String) -> Unit,
-    onLongClick: (String) -> Unit,
     onInspectEntry: (String) -> Unit,
     onGoUp: () -> Unit,
 ) {
@@ -250,7 +247,6 @@ fun FilesScreen(
                         selected = item.path in selectedPaths,
                         selectionMode = selectionMode,
                         onClick = { if (selectionMode) onToggleSelection(item.path) else onOpenEntry(item.path) },
-                        onLongClick = { if (selectionMode) onToggleSelection(item.path) else onLongClick(item.path) },
                         onInspect = { onInspectEntry(item.path) },
                     )
                 }
@@ -259,20 +255,18 @@ fun FilesScreen(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun AtelierFileRow(
     item: AtelierFileItem,
     selected: Boolean,
     selectionMode: Boolean,
     onClick: () -> Unit,
-    onLongClick: () -> Unit,
     onInspect: () -> Unit,
 ) {
     Surface(
         color = if (selected) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surfaceContainerLow,
         shape = RoundedCornerShape(14.dp),
-        modifier = Modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick).testTag("entry-${item.name}"),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).testTag("entry-${item.name}"),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp),
@@ -321,9 +315,6 @@ private fun AtelierFileRow(
             } else {
                 IconButton(onClick = onInspect, modifier = Modifier.size(36.dp).testTag("workspace-inspect-${item.path}")) {
                     Icon(Icons.Outlined.Info, contentDescription = "Inspect ${item.name}", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
-                }
-                IconButton(onClick = onLongClick, modifier = Modifier.size(36.dp).testTag("workspace-entry-options-${item.path}")) {
-                    Icon(Icons.Outlined.MoreVert, contentDescription = "${item.name} options", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp))
                 }
             }
         }
