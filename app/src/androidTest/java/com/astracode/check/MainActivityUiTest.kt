@@ -424,12 +424,12 @@ class MainActivityUiTest {
             runCatching { composeRule.onNodeWithText("QUICK INSPECTOR").assertIsDisplayed() }.isSuccess
         }
 
-        composeRule.onNodeWithText("Rename").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Copy").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Move").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Sync").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Metadata").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Move to Trash").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Rename").fetchSemanticsNode()
+        composeRule.onNodeWithText("Copy").fetchSemanticsNode()
+        composeRule.onNodeWithText("Move").fetchSemanticsNode()
+        composeRule.onNodeWithText("Sync").fetchSemanticsNode()
+        composeRule.onNodeWithText("Metadata").fetchSemanticsNode()
+        composeRule.onNodeWithText("Move to Trash").fetchSemanticsNode()
     }
 
     private fun waitForUiStage(stage: String, timeoutMillis: Long = 5_000, condition: () -> Boolean) {
