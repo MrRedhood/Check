@@ -87,7 +87,6 @@ fun AtelierPreviewScreen(onBack: () -> Unit) {
                         onToggleSelection = { path -> selectedPaths.value = if (path in selectedPaths.value) selectedPaths.value - path else selectedPaths.value + path },
                         onBulkAction = { if (it == "zip") { zipName.value = "workspace-snapshot.zip"; showZip.value = true } else message.value = "Preview only: action not executed." },
                         onOpenEntry = { message.value = "Preview only: item selected." },
-                        onLongClick = { path -> demoFiles.firstOrNull { it.path == path }?.let { inspector.value = it } },
                         onInspectEntry = { path -> demoFiles.firstOrNull { it.path == path }?.let { inspector.value = it } },
                         onGoUp = { message.value = "Already at preview root." },
                     )
