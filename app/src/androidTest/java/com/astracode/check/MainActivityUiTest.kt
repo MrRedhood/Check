@@ -414,6 +414,8 @@ class MainActivityUiTest {
         composeRule.onNodeWithText("Rename").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Copy").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Move").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Sync").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Metadata").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Move to Trash").performScrollTo().assertIsDisplayed()
     }
 
