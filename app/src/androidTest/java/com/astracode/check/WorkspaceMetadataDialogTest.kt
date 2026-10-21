@@ -9,6 +9,7 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.printToString
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
@@ -62,6 +63,24 @@ class WorkspaceMetadataDialogTest {
         requestMetadata("workspace-entry-README.txt")
         awaitMetadataDialog("Name: README.txt")
         assertMetadataFields()
+        composeRule.onNodeWithTag("workspace-metadata-close").performClick()
+    }
+
+    @Test
+    fun creatingFileWithoutExtensionAddsTxtAndMetadataShowsDescription() {
+        openBrowser()
+        composeRule.onNodeWithTag("workspace-create-file").performClick()
+        composeRule.onNodeWithTag("workspace-new-file-name").performTextInput("my file (1)")
+        composeRule.onNodeWithTag("confirm-workspace-create-file").performClick()
+
+        val created = File(workspaceRoot, "my file (1).txt")
+        composeRule.waitUntil(timeoutMillis = 5_000) { created.isFile }
+        assertEquals("my file (1).txt", created.name)
+        composeRule.onNodeWithTag("workspace-editor-back").performClick()
+        requestMetadata("workspace-entry-my file (1).txt")
+        awaitMetadataDialog("Format: txt file (text file)")
+        composeRule.onNodeWithTag("workspace-metadata-details")
+            .assertTextContains("Name: my file (1).txt", substring = true)
         composeRule.onNodeWithTag("workspace-metadata-close").performClick()
     }
 

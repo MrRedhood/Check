@@ -116,6 +116,8 @@ internal fun WorkspaceBrowserPanel(
     var metadataLoading by remember(root) { mutableStateOf(false) }
     var metadataRequestPath by remember(root) { mutableStateOf<String?>(null) }
     var metadataStatus by remember(root) { mutableStateOf("idle") }
+    var showCreateFileDialog by remember(root) { mutableStateOf(false) }
+    var createFileName by remember(root) { mutableStateOf("") }
     val context = LocalContext.current
     val externalRoot = remember(root) { File(root.parentFile, "external-workspace") }
     var syncedPaths by remember(root) { mutableStateOf(loadSyncedPaths(context, root)) }
@@ -240,6 +242,12 @@ internal fun WorkspaceBrowserPanel(
         }
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(if (archivePath == null) "Workspace files" else "ZIP: " + archivePath!!.substringAfterLast("/"), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            if (openedFile == null && openedArchiveEntry == null && archivePath == null && !selectionMode) {
+                TextButton(
+                    onClick = { createFileName = ""; showCreateFileDialog = true },
+                    modifier = Modifier.testTag("workspace-create-file"),
+                ) { Text("New file") }
+            }
             if (openedFile == null && openedArchiveEntry == null) {
                 TextButton(
                     onClick = {
@@ -1321,6 +1329,67 @@ internal fun WorkspaceBrowserPanel(
             dismissButton = { TextButton(onClick = { pendingDeleteEntry = null }) { Text("Cancel") } })
     }
 
+    if (showCreateFileDialog) {
+        AlertDialog(
+            onDismissRequest = { showCreateFileDialog = false },
+            title = { Text("Create text file") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("A name without an extension will be saved as a .txt file. Existing extensions are preserved.")
+                    OutlinedTextField(
+                        value = createFileName,
+                        onValueChange = { createFileName = it },
+                        label = { Text("File name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("workspace-new-file-name"),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val normalizedName = normalizeNewTextFileName(createFileName)
+                        if (!isSimpleWorkspaceName(normalizedName)) {
+                            message = "Enter a valid file name without path separators."
+                        } else {
+                            val destinationPath = joinWorkspacePath(currentDirectory, normalizedName)
+                            scope.launch {
+                                val result = runCatching {
+                                    withContext(Dispatchers.IO) {
+                                        val target = resolveWorkspacePath(root, destinationPath)
+                                        if (target.exists()) throw IOException("A file with that name already exists.")
+                                        val parent = target.parentFile
+                                            ?: throw IOException("The destination folder is not available.")
+                                        if (!parent.exists() && !parent.mkdirs()) {
+                                            throw IOException("Could not create the destination folder.")
+                                        }
+                                        if (!target.createNewFile()) throw IOException("Could not create the file.")
+                                        destinationPath
+                                    }
+                                }
+                                result.onSuccess { path ->
+                                    showCreateFileDialog = false
+                                    createFileName = ""
+                                    openedFile = path
+                                    editorText = ""
+                                    savedText = ""
+                                    refreshKey++
+                                    message = "Created $normalizedName"
+                                }.onFailure { error ->
+                                    message = error.message ?: "Could not create file."
+                                }
+                            }
+                        }
+                    },
+                    modifier = Modifier.testTag("confirm-workspace-create-file"),
+                ) { Text("Create file") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCreateFileDialog = false }) { Text("Cancel") }
+            },
+        )
+    }
+
     operationEntry?.let { entry ->
         val kind = operationKind.orEmpty()
         AlertDialog(onDismissRequest = { operationEntry = null; operationKind = null },
@@ -1583,8 +1652,7 @@ private fun workspaceMetadataText(root: File, relativePath: String): String {
                 .sumOf { Files.size(it) }
         }
     } else attributes.size()
-    val format = if (isDirectory) "Folder" else
-        file.name.substringAfterLast('.', "").takeIf { it.isNotBlank() }?.uppercase() ?: "Unknown"
+    val format = if (isDirectory) "Folder" else formatFileTypeLabel(file.name)
     return "Name: " + file.name +
         "\nType: " + (if (isDirectory) "Folder" else "File") +
         "\nSize: " + size + " bytes" +
@@ -1601,7 +1669,7 @@ private fun workspaceArchiveMetadataText(root: File, archivePath: String, entryP
         "\nSize: " + item.sizeBytes + " bytes" +
         "\nCreated: Not recorded by this ZIP entry" +
         "\nModified: " + (item.modifiedAtMillis?.let { java.time.Instant.ofEpochMilli(it).toString() } ?: "Not recorded") +
-        "\nFormat: " + item.format +
+        "\nFormat: " + (if (item.isDirectory) "Folder" else formatFileTypeLabel(item.name)) +
         "\nStorage path: " + archivePath + "!/" + item.path
 }
 
