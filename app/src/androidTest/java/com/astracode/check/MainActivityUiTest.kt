@@ -398,7 +398,7 @@ class MainActivityUiTest {
     }
 
     @Test
-    fun fileRowsUseInspectorAndIgnoreLongPressWithoutOverflowMenu() {
+    fun fileRowsDoNotShowOverflowOrOpenInspectorOnLongPress() {
         composeRule.onNodeWithTag("open-atelier-preview").performClick()
         composeRule.onNodeWithText("Design preview").assertIsDisplayed()
         composeRule.onNodeWithTag("bottom-nav-files").performClick()
@@ -408,9 +408,22 @@ class MainActivityUiTest {
 
         composeRule.onNodeWithTag("entry-src").performTouchInput { longClick() }
         assertTrue(runCatching { composeRule.onNodeWithText("QUICK INSPECTOR").assertIsDisplayed() }.isFailure)
+    }
 
+    @Test
+    fun inspectorButtonOpensScrollableFileActions() {
+        composeRule.onNodeWithTag("open-atelier-preview").performClick()
+        composeRule.onNodeWithText("Design preview").assertIsDisplayed()
+        composeRule.onNodeWithTag("bottom-nav-files").performClick()
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-inspect-src").assertIsDisplayed() }.isSuccess
+        }
         composeRule.onNodeWithTag("workspace-inspect-src").performClick()
-        composeRule.onNodeWithText("QUICK INSPECTOR").assertIsDisplayed()
+        waitForUiStage("inspector opened from info button") {
+            runCatching { composeRule.onNodeWithText("QUICK INSPECTOR").assertIsDisplayed() }.isSuccess
+        }
+
         composeRule.onNodeWithText("Rename").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Copy").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Move").performScrollTo().assertIsDisplayed()
