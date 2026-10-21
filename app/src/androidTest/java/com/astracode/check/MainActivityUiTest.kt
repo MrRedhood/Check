@@ -353,6 +353,11 @@ class MainActivityUiTest {
                 !File(workspaceRoot, "README.txt").exists()
         }
 
+        waitForUiStage("safety dialog returns to close state after rename") {
+            runCatching {
+                composeRule.onNodeWithTag("workspace-safety-close").assertIsDisplayed()
+            }.isSuccess
+        }
         composeRule.onNodeWithTag("workspace-safety-close").performClick()
         waitForUiStage("renamed file appears in browser") {
             runCatching {
