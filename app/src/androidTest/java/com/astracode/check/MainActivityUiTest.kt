@@ -398,6 +398,32 @@ class MainActivityUiTest {
     }
 
     @Test
+    fun mobileBackReturnsToPreviousTabInsteadOfExitingApp() {
+        composeRule.onNodeWithTag("open-atelier-preview").performClick()
+        composeRule.onNodeWithText("Design preview").assertIsDisplayed()
+        composeRule.onNodeWithTag("bottom-nav-search").performClick()
+        composeRule.onNodeWithText("Search & inspect").assertIsDisplayed()
+
+        composeRule.activityRule.scenario.onActivity { activity ->
+            activity.onBackPressedDispatcher.onBackPressed()
+        }
+
+        composeRule.onNodeWithText("Design preview").assertIsDisplayed()
+        composeRule.onNodeWithText("WORKSPACE / FILE SYSTEM").assertIsDisplayed()
+        composeRule.activityRule.scenario.onActivity { activity ->
+            assertFalse("Back navigation must not finish the app.", activity.isFinishing)
+        }
+
+        composeRule.activityRule.scenario.onActivity { activity ->
+            activity.onBackPressedDispatcher.onBackPressed()
+        }
+        composeRule.onNodeWithText("Standalone file access check").assertIsDisplayed()
+        composeRule.activityRule.scenario.onActivity { activity ->
+            assertFalse("Returning from the preview must leave the app open.", activity.isFinishing)
+        }
+    }
+
+    @Test
     fun fileRowsDoNotShowOverflowOrOpenInspectorOnLongPress() {
         composeRule.onNodeWithTag("open-atelier-preview").performClick()
         composeRule.onNodeWithText("Design preview").assertIsDisplayed()

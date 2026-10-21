@@ -1,5 +1,6 @@
 package com.astracode.check
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -40,6 +42,25 @@ fun AtelierPreviewScreen(onBack: () -> Unit) {
     val showZip = remember { mutableStateOf(false) }
     val zipName = remember { mutableStateOf("workspace-snapshot.zip") }
     val inspector = remember { mutableStateOf<AtelierFileItem?>(null) }
+    val screenBackStack = remember { mutableStateListOf<Screen>() }
+
+    fun selectScreen(screen: Screen) {
+        if (screen == currentScreen.value) return
+        screenBackStack.add(currentScreen.value)
+        currentScreen.value = screen
+    }
+
+    BackHandler {
+        when {
+            inspector.value != null -> inspector.value = null
+            showZip.value -> showZip.value = false
+            screenBackStack.isNotEmpty() -> {
+                currentScreen.value = screenBackStack.removeAt(screenBackStack.lastIndex)
+            }
+            currentScreen.value != Screen.Files -> currentScreen.value = Screen.Files
+            else -> onBack()
+        }
+    }
     val demoFiles = listOf(
         AtelierFileItem("src", "src", "Folder", true, 0, "modified recently", childCount = 8),
         AtelierFileItem("src/Main.kt", "Main.kt", "Kotlin", false, 15120, "modified 12 min ago", formatLabel = "KOTLIN"),
@@ -82,7 +103,7 @@ fun AtelierPreviewScreen(onBack: () -> Unit) {
                         onNewFolder = { message.value = "Preview only: no folder was created." },
                         onOpenStandaloneFile = { message.value = "Preview only: no external file was opened." },
                         onManageSavedDocuments = { message.value = "Preview only: saved-file management is not connected." },
-                        onOpenSafetyTools = { currentScreen.value = Screen.Safety },
+                        onOpenSafetyTools = { selectScreen(Screen.Safety) },
                         onSelectionModeChanged = { selectionMode.value = it; if (!it) selectedPaths.value = emptySet() },
                         onToggleSelection = { path -> selectedPaths.value = if (path in selectedPaths.value) selectedPaths.value - path else selectedPaths.value + path },
                         onBulkAction = { if (it == "zip") { zipName.value = "workspace-snapshot.zip"; showZip.value = true } else message.value = "Preview only: action not executed." },
@@ -116,7 +137,7 @@ fun AtelierPreviewScreen(onBack: () -> Unit) {
                 }
                 }
                 message.value?.let { Text(it, color = MaterialTheme.colorScheme.tertiary, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) }
-                AstraCodeBottomNav(currentScreen.value, onTabSelected = { currentScreen.value = it })
+                AstraCodeBottomNav(currentScreen.value, onTabSelected = ::selectScreen)
             }
         }
     }
