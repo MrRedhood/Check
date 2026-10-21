@@ -54,7 +54,6 @@ fun QuickInspectorSheet(
     onMove: () -> Unit,
     onMoveToTrash: () -> Unit,
     onSync: () -> Unit,
-    onShowMetadata: () -> Unit,
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -115,7 +114,6 @@ fun QuickInspectorSheet(
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 ActionButton("Sync", onSync, Modifier.weight(1f), Icons.Outlined.Sync)
-                ActionButton("Metadata", onShowMetadata, Modifier.weight(1f), Icons.Outlined.Info)
             }
             OutlinedButton(
                 onClick = onMoveToTrash,
