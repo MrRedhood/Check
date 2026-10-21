@@ -287,7 +287,7 @@ class MainActivityUiTest {
                     .assertTextContains("Name: project.zip", substring = true)
             }.isSuccess
         }
-        composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Format: ZIP", substring = true)
+        composeRule.onNodeWithTag("workspace-metadata-details").assertTextContains("Format: zip file (ZIP archive)", substring = true)
         composeRule.onNodeWithTag("workspace-metadata-close").performClick()
 
         composeRule.onNodeWithTag("workspace-entry-project.zip").performClick()
