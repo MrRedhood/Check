@@ -411,10 +411,10 @@ class MainActivityUiTest {
 
         composeRule.onNodeWithTag("workspace-inspect-src").performClick()
         composeRule.onNodeWithText("QUICK INSPECTOR").assertIsDisplayed()
-        composeRule.onNodeWithText("Rename").assertIsDisplayed()
-        composeRule.onNodeWithText("Copy").assertIsDisplayed()
-        composeRule.onNodeWithText("Move").assertIsDisplayed()
-        composeRule.onNodeWithText("Move to Trash").assertIsDisplayed()
+        composeRule.onNodeWithText("Rename").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Copy").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Move").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Move to Trash").performScrollTo().assertIsDisplayed()
     }
 
     private fun waitForUiStage(stage: String, timeoutMillis: Long = 5_000, condition: () -> Boolean) {
