@@ -142,7 +142,6 @@ fun AtelierPreviewScreen(onBack: () -> Unit) {
             onMove = { message.value = "Preview only: no move was performed."; inspector.value = null },
             onMoveToTrash = { message.value = "Preview only: nothing was moved to Trash."; inspector.value = null },
             onSync = { message.value = "Preview only: sync is not connected."; inspector.value = null },
-            onShowMetadata = { message.value = "Preview only: no additional metadata was loaded."; inspector.value = null },
         )
     }
 }
