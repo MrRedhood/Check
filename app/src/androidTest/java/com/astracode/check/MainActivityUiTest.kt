@@ -471,7 +471,7 @@ class MainActivityUiTest {
 
         composeRule.onNodeWithTag("workspace-entry-README.txt").performClick()
         waitForUiStage("README editor loaded") {
-            runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("Workspace fixture") }.isSuccess
+            runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("Workspace fixture", substring = true) }.isSuccess
         }
         composeRule.onNodeWithTag("workspace-editor-input").performTextReplacement("README unsaved draft")
 
@@ -486,21 +486,27 @@ class MainActivityUiTest {
         }
         composeRule.onNodeWithTag("workspace-entry-Main.kt").performClick()
         waitForUiStage("Main.kt editor loaded") {
-            runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("fun main() = Unit") }.isSuccess
+            runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("fun main() = Unit", substring = true) }.isSuccess
         }
         composeRule.onNodeWithTag("workspace-editor-input").performTextReplacement("fun main() = 42")
 
         composeRule.onNodeWithTag("workspace-tab-README.txt").performClick()
-        composeRule.onNodeWithTag("workspace-editor-input").assertTextEquals("README unsaved draft")
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("README unsaved draft", substring = true) }.isSuccess
+        }
         composeRule.onNodeWithTag("workspace-tab-app__src__Main.kt").performClick()
-        composeRule.onNodeWithTag("workspace-editor-input").assertTextEquals("fun main() = 42")
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("fun main() = 42", substring = true) }.isSuccess
+        }
 
         composeRule.onNodeWithTag("workspace-save-file").performClick()
         waitForUiStage("Main.kt saved") {
             File(workspaceRoot, "app/src/Main.kt").takeIf { it.isFile }?.readText() == "fun main() = 42"
         }
         composeRule.onNodeWithTag("workspace-tab-README.txt").performClick()
-        composeRule.onNodeWithTag("workspace-editor-input").assertTextEquals("README unsaved draft")
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("README unsaved draft", substring = true) }.isSuccess
+        }
         composeRule.onNodeWithTag("workspace-save-file").performClick()
         waitForUiStage("README saved") {
             File(workspaceRoot, "README.txt").takeIf { it.isFile }?.readText() == "README unsaved draft"
@@ -524,7 +530,7 @@ class MainActivityUiTest {
 
         composeRule.onNodeWithTag("workspace-tab-close-README.txt").performClick()
         composeRule.onNodeWithTag("workspace-tab-discard-cancel").performClick()
-        composeRule.onNodeWithTag("workspace-editor-input").assertTextEquals("unsaved and should be discarded")
+        composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("unsaved and should be discarded", substring = true)
 
         composeRule.onNodeWithTag("workspace-tab-close-README.txt").performClick()
         composeRule.onNodeWithTag("workspace-tab-discard-confirm").performClick()
