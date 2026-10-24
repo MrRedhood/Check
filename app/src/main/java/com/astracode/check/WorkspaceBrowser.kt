@@ -154,6 +154,7 @@ internal fun WorkspaceBrowserPanel(
     fun activateEditorFile(path: String) {
         val existing = editorTabs.firstOrNull { it.path == path }
         if (existing != null) {
+            currentDirectory = path.substringBeforeLast('/', "")
             openedFile = path
             return
         }
@@ -172,6 +173,7 @@ internal fun WorkspaceBrowserPanel(
             return
         }
         editorTabs = editorTabs + WorkspaceEditorTab(path = path, isLoading = true)
+        currentDirectory = path.substringBeforeLast('/', "")
         openedFile = path
     }
 
@@ -181,7 +183,9 @@ internal fun WorkspaceBrowserPanel(
         val remaining = editorTabs.filterNot { it.path == path }
         editorTabs = remaining
         if (openedFile == path) {
-            openedFile = remaining.getOrNull(oldIndex.coerceAtMost(remaining.lastIndex))?.path
+            val nextPath = remaining.getOrNull(oldIndex.coerceAtMost(remaining.lastIndex))?.path
+            currentDirectory = nextPath?.substringBeforeLast('/', "") ?: currentDirectory
+            openedFile = nextPath
         }
         pendingCloseTabPath = null
         showDiscardTabDialog = false
@@ -418,7 +422,7 @@ internal fun WorkspaceBrowserPanel(
                     val tagSuffix = tab.path.replace("/", "__")
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         TextButton(
-                            onClick = { openedFile = tab.path },
+                            onClick = { activateEditorFile(tab.path) },
                             modifier = Modifier.testTag("workspace-tab-$tagSuffix"),
                         ) {
                             val dirtyMarker = if (tab.text != tab.savedText) " •" else ""
