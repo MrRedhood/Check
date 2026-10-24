@@ -15,8 +15,8 @@ class EditorTextToolsTest {
 
         assertEquals("1 │ alpha\n2 │ beta\n3 │ ", transformed.text.text)
         assertEquals(4, transformed.offsetMapping.originalToTransformed(0))
-        assertEquals(10, transformed.offsetMapping.originalToTransformed(6))
-        assertEquals(11, transformed.offsetMapping.transformedToOriginal(15))
+        assertEquals(14, transformed.offsetMapping.originalToTransformed(6))
+        assertEquals(7, transformed.offsetMapping.transformedToOriginal(15))
     }
 
     @Test
