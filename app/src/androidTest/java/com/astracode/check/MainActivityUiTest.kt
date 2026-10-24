@@ -715,4 +715,41 @@ class MainActivityUiTest {
         }
     }
 
+
+    @Test
+    fun workspaceEditorCanFindAndReplaceSingleAndAllMatches() {
+        val sample = File(workspaceRoot, "SearchReplace.kt")
+        sample.writeText("val target = 1\\nval target = 2\\n")
+        composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-SearchReplace.kt").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-entry-SearchReplace.kt").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching {
+                composeRule.onNodeWithTag("workspace-editor-input")
+                    .assertTextContains("val target = 1", substring = true)
+            }.isSuccess
+        }
+
+        composeRule.onNodeWithTag("workspace-editor-find-toggle").performClick()
+        composeRule.onNodeWithTag("workspace-editor-find-input").performTextReplacement("target")
+        composeRule.onNodeWithTag("workspace-editor-replace-input").performTextReplacement("answer")
+        composeRule.onNodeWithTag("workspace-editor-find-next").performClick()
+        composeRule.onNodeWithTag("workspace-editor-replace-one").performClick()
+        composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("val answer = 1", substring = true)
+        composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("val target = 2", substring = true)
+
+        composeRule.onNodeWithTag("workspace-editor-replace-input").performTextReplacement("item")
+        composeRule.onNodeWithTag("workspace-editor-replace-all").performClick()
+        composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("val item = 2", substring = true)
+        composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("val answer = 1", substring = true)
+
+        composeRule.onNodeWithTag("workspace-save-file").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            sample.readText() == "val answer = 1\\nval item = 2\\n"
+        }
+        assertEquals("val answer = 1\\nval item = 2\\n", sample.readText())
+    }
+
 }

@@ -43,6 +43,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -155,6 +159,18 @@ internal fun WorkspaceBrowserPanel(
     val editorText = activeEditorTab?.text.orEmpty()
     val savedText = activeEditorTab?.savedText.orEmpty()
     val loading = activeEditorTab?.isLoading ?: false
+    var editorFieldValue by remember(openedFile) { mutableStateOf(TextFieldValue(editorText)) }
+    var showFindReplace by remember(openedFile) { mutableStateOf(false) }
+    var findQuery by remember(openedFile) { mutableStateOf("") }
+    var replacementText by remember(openedFile) { mutableStateOf("") }
+    val editorFocusRequester = remember { FocusRequester() }
+    val lineNumberTransformation = remember { lineNumberVisualTransformation() }
+
+    LaunchedEffect(openedFile, editorText) {
+        if (editorFieldValue.text != editorText) {
+            editorFieldValue = TextFieldValue(editorText, selection = TextRange(editorText.length))
+        }
+    }
 
     val saveMutex = remember(root) { Mutex() }
 
@@ -681,20 +697,126 @@ internal fun WorkspaceBrowserPanel(
                     }
                 }
             }
+            TextButton(
+                onClick = { showFindReplace = !showFindReplace },
+                modifier = Modifier.testTag("workspace-editor-find-toggle"),
+            ) { Text(if (showFindReplace) "Hide Find / Replace" else "Find / Replace") }
+            if (showFindReplace) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        OutlinedTextField(
+                            value = findQuery,
+                            onValueChange = { findQuery = it },
+                            modifier = Modifier.weight(1f).testTag("workspace-editor-find-input"),
+                            label = { Text("Find word, symbol or line") },
+                            maxLines = 3,
+                        )
+                        TextButton(
+                            onClick = {
+                                if (countMatches(editorFieldValue.text, findQuery) == 0) {
+                                    message = if (findQuery.isBlank()) "Enter text to search for." else "No matches found."
+                                } else {
+                                    editorFieldValue = findNextMatch(editorFieldValue, findQuery)
+                                    editorFocusRequester.requestFocus()
+                                }
+                            },
+                            enabled = findQuery.isNotEmpty(),
+                            modifier = Modifier.testTag("workspace-editor-find-next"),
+                        ) { Text("Next") }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        OutlinedTextField(
+                            value = replacementText,
+                            onValueChange = { replacementText = it },
+                            modifier = Modifier.weight(1f).testTag("workspace-editor-replace-input"),
+                            label = { Text("Replace with") },
+                            maxLines = 3,
+                        )
+                        TextButton(
+                            onClick = {
+                                if (countMatches(editorFieldValue.text, findQuery) == 0) {
+                                    message = if (findQuery.isBlank()) "Enter text to search for." else "No matches found."
+                                } else {
+                                    editorFieldValue = findPreviousMatch(editorFieldValue, findQuery)
+                                    editorFocusRequester.requestFocus()
+                                }
+                            },
+                            enabled = findQuery.isNotEmpty(),
+                            modifier = Modifier.testTag("workspace-editor-find-previous"),
+                        ) { Text("Previous") }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "${countMatches(editorFieldValue.text, findQuery)} matches",
+                            modifier = Modifier.weight(1f).testTag("workspace-editor-find-count"),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        TextButton(
+                            onClick = {
+                                val (updated, didReplace) = replaceOneMatch(editorFieldValue, findQuery, replacementText)
+                                if (didReplace) {
+                                    editorFieldValue = updated
+                                    updateEditorText(updated.text)
+                                    editorFocusRequester.requestFocus()
+                                    message = "Replaced one occurrence."
+                                } else {
+                                    message = if (findQuery.isBlank()) "Enter text to search for." else "No matches found."
+                                }
+                            },
+                            enabled = findQuery.isNotEmpty() && !replacingOldestTab,
+                            modifier = Modifier.testTag("workspace-editor-replace-one"),
+                        ) { Text("Replace") }
+                        TextButton(
+                            onClick = {
+                                val (updated, count) = replaceAllMatches(editorFieldValue, findQuery, replacementText)
+                                if (count > 0) {
+                                    editorFieldValue = updated
+                                    updateEditorText(updated.text)
+                                    message = "Replaced ${count} occurrence(s)."
+                                } else {
+                                    message = if (findQuery.isBlank()) "Enter text to search for." else "No matches found."
+                                }
+                            },
+                            enabled = findQuery.isNotEmpty() && !replacingOldestTab,
+                            modifier = Modifier.testTag("workspace-editor-replace-all"),
+                        ) { Text("Replace all") }
+                    }
+                }
+            }
             if (loading) {
                 Text("Opening file…", modifier = Modifier.testTag("workspace-editor-loading"))
             } else {
                 OutlinedTextField(
-                    value = editorText,
-                    onValueChange = ::updateEditorText,
-                    modifier = Modifier.fillMaxWidth().weight(1f).testTag("workspace-editor-input"),
+                    value = editorFieldValue,
+                    onValueChange = {
+                        editorFieldValue = it
+                        updateEditorText(it.text)
+                    },
+                    visualTransformation = lineNumberTransformation,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .focusRequester(editorFocusRequester)
+                        .testTag("workspace-editor-input"),
                     label = { Text("File contents") },
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = {
                             val path = openedFile ?: return@Button
-                            val contentToSave = editorText
+                            val contentToSave = editorFieldValue.text
                             scope.launch {
                                 saveWorkspaceEditorTab(path, contentToSave)
                                     .onSuccess { outcome ->
@@ -711,7 +833,7 @@ internal fun WorkspaceBrowserPanel(
                                     }
                             }
                         },
-                        enabled = !loading && editorText != savedText && !replacingOldestTab,
+                        enabled = !loading && editorFieldValue.text != savedText && !replacingOldestTab,
                         modifier = Modifier.testTag("workspace-save-file"),
                     ) { Text("Save") }
                     TextButton(onClick = { openedFile = null }) { Text("Back to Files") }
