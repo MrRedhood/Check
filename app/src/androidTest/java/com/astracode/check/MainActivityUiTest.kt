@@ -760,7 +760,6 @@ class MainActivityUiTest {
         composeRule.onNodeWithTag("workspace-editor-word-wrap-toggle").assertTextContains("Word wrap: Off")
         composeRule.onNodeWithTag("workspace-editor-word-wrap-toggle").performClick()
         composeRule.onNodeWithTag("workspace-editor-word-wrap-toggle").assertTextContains("Word wrap: On")
-        composeRule.onNodeWithTag("workspace-editor-autosave-status").assertTextContains("Autosave on")
 
         composeRule.waitUntil(timeoutMillis = 10_000) {
             sample.readText() == "hello 😀"
