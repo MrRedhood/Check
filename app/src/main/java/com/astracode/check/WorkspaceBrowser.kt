@@ -251,11 +251,11 @@ internal fun WorkspaceBrowserPanel(
         }
     }
 
-    fun updateEditorText(newText: String) {
-        if (replacingOldestTab) return
-        val path = openedFile ?: return
-        val currentTab = editorTabs.firstOrNull { it.path == path } ?: return
-        if (newText == currentTab.text) return
+    fun updateEditorText(newText: String): Boolean {
+        if (replacingOldestTab) return false
+        val path = openedFile ?: return false
+        val currentTab = editorTabs.firstOrNull { it.path == path } ?: return false
+        if (newText == currentTab.text) return true
 
         val otherBufferUnits = editorTabs.asSequence()
             .filterNot { it.path == path }
@@ -264,7 +264,7 @@ internal fun WorkspaceBrowserPanel(
             MAX_OPEN_EDITOR_BUFFER_CHARS
         ) {
             message = "Editor memory limit reached. Save or close another tab before adding more text."
-            return
+            return false
         }
 
         val now = SystemClock.elapsedRealtime()
@@ -276,6 +276,7 @@ internal fun WorkspaceBrowserPanel(
         editorTabs = editorTabs.map { tab ->
             if (tab.path == path) tab.copy(text = newText) else tab
         }
+        return true
     }
 
     fun activateEditorFile(path: String) {
@@ -767,10 +768,17 @@ internal fun WorkspaceBrowserPanel(
                             onClick = {
                                 val (updated, didReplace) = replaceOneMatch(editorFieldValue, findQuery, replacementText)
                                 if (didReplace) {
-                                    editorFieldValue = updated
-                                    updateEditorText(updated.text)
-                                    editorFocusRequester.requestFocus()
-                                    message = "Replaced one occurrence."
+                                    if (updateEditorText(updated.text)) {
+                                        editorFieldValue = updated
+                                        editorFocusRequester.requestFocus()
+                                        message = "Replaced one occurrence."
+                                    } else {
+                                        val currentText = editorTabs.firstOrNull { it.path == openedFile }?.text.orEmpty()
+                                        editorFieldValue = TextFieldValue(
+                                            currentText,
+                                            selection = TextRange(updated.selection.end.coerceIn(0, currentText.length)),
+                                        )
+                                    }
                                 } else {
                                     message = if (findQuery.isBlank()) "Enter text to search for." else "No matches found."
                                 }
@@ -782,9 +790,16 @@ internal fun WorkspaceBrowserPanel(
                             onClick = {
                                 val (updated, count) = replaceAllMatches(editorFieldValue, findQuery, replacementText)
                                 if (count > 0) {
-                                    editorFieldValue = updated
-                                    updateEditorText(updated.text)
-                                    message = "Replaced ${count} occurrence(s)."
+                                    if (updateEditorText(updated.text)) {
+                                        editorFieldValue = updated
+                                        message = "Replaced ${count} occurrence(s)."
+                                    } else {
+                                        val currentText = editorTabs.firstOrNull { it.path == openedFile }?.text.orEmpty()
+                                        editorFieldValue = TextFieldValue(
+                                            currentText,
+                                            selection = TextRange(updated.selection.end.coerceIn(0, currentText.length)),
+                                        )
+                                    }
                                 } else {
                                     message = if (findQuery.isBlank()) "Enter text to search for." else "No matches found."
                                 }
@@ -800,9 +815,17 @@ internal fun WorkspaceBrowserPanel(
             } else {
                 OutlinedTextField(
                     value = editorFieldValue,
-                    onValueChange = {
-                        editorFieldValue = it
-                        updateEditorText(it.text)
+                    onValueChange = { newValue ->
+                        val accepted = updateEditorText(newValue.text)
+                        if (accepted) {
+                            editorFieldValue = newValue
+                        } else {
+                            val currentText = editorTabs.firstOrNull { it.path == openedFile }?.text.orEmpty()
+                            editorFieldValue = TextFieldValue(
+                                currentText,
+                                selection = TextRange(newValue.selection.end.coerceIn(0, currentText.length)),
+                            )
+                        }
                     },
                     visualTransformation = lineNumberTransformation,
                     modifier = Modifier

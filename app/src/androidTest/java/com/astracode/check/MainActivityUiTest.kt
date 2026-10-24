@@ -719,7 +719,7 @@ class MainActivityUiTest {
     @Test
     fun workspaceEditorCanFindAndReplaceSingleAndAllMatches() {
         val sample = File(workspaceRoot, "SearchReplace.kt")
-        sample.writeText("val target = 1\\nval target = 2\\n")
+        sample.writeText("val target = 1\nval target = 2\n")
         composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
         composeRule.waitUntil(timeoutMillis = 5_000) {
             runCatching { composeRule.onNodeWithTag("workspace-entry-SearchReplace.kt").assertIsDisplayed() }.isSuccess
@@ -747,9 +747,9 @@ class MainActivityUiTest {
 
         composeRule.onNodeWithTag("workspace-save-file").performClick()
         composeRule.waitUntil(timeoutMillis = 5_000) {
-            sample.readText() == "val answer = 1\\nval item = 2\\n"
+            sample.readText() == "val answer = 1\nval item = 2\n"
         }
-        assertEquals("val answer = 1\\nval item = 2\\n", sample.readText())
+        assertEquals("val answer = 1\nval item = 2\n", sample.readText())
     }
 
 }
