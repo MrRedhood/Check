@@ -432,17 +432,22 @@ internal fun WorkspaceBrowserPanel(
         delay((nextSave.second - now).coerceAtLeast(0L))
         val tabToSave = editorTabs.firstOrNull { it.path == nextSave.first }
         if (tabToSave != null && !tabToSave.isLoading && tabToSave.text != tabToSave.savedText) {
-            saveWorkspaceEditorTab(tabToSave.path, tabToSave.text)
-                .onSuccess { outcome ->
-                    if (!outcome.linkedSyncSucceeded) {
-                        message = "Autosaved locally, but linked sync failed: " +
-                            (outcome.linkedSyncError ?: "unknown sync error")
+            val pathToSave = tabToSave.path
+            val contentToSave = tabToSave.text
+            // Let the actual save complete even if another edit restarts the debounce timer.
+            scope.launch {
+                saveWorkspaceEditorTab(pathToSave, contentToSave)
+                    .onSuccess { outcome ->
+                        if (!outcome.linkedSyncSucceeded) {
+                            message = "Autosaved locally, but linked sync failed: " +
+                                (outcome.linkedSyncError ?: "unknown sync error")
+                        }
                     }
-                }
-                .onFailure { error ->
-                    message = "Autosave failed for ${tabToSave.path.substringAfterLast('/')} : " +
-                        (error.message ?: "Unknown save error.")
-                }
+                    .onFailure { error ->
+                        message = "Autosave failed for ${pathToSave.substringAfterLast('/')} : " +
+                            (error.message ?: "Unknown save error.")
+                    }
+            }
         }
     }
 
