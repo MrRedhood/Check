@@ -543,7 +543,9 @@ class MainActivityUiTest {
 
         (1..4).forEach { index ->
             waitForUiStage("tab $index row") {
-                runCatching { composeRule.onNodeWithTag("workspace-entry-tab-$index.txt").assertIsDisplayed() }.isSuccess
+                runCatching {
+                    composeRule.onNodeWithTag("workspace-entry-tab-$index.txt").performScrollTo().assertIsDisplayed()
+                }.isSuccess
             }
             composeRule.onNodeWithTag("workspace-entry-tab-$index.txt").performScrollTo().performClick()
             waitForUiStage("tab $index loaded") {
