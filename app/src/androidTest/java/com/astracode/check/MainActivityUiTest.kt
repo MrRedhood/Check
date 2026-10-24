@@ -659,6 +659,42 @@ class MainActivityUiTest {
         assertEquals("saved by autosave", file.readText())
     }
 
+    @Test
+    fun workspaceRowsCanCloseAndReopenEditorTabs() {
+        composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
+        waitForUiStage("README row") {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-README.txt").assertIsDisplayed() }.isSuccess
+        }
+
+        composeRule.onNodeWithTag("workspace-entry-README.txt").performClick()
+        waitForUiStage("README editor opened from workspace") {
+            runCatching {
+                composeRule.onNodeWithTag("workspace-editor-input")
+                    .assertTextContains("Workspace fixture", substring = true)
+            }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-editor-back").performClick()
+        waitForUiStage("Workspace row returns with its open-file close control") {
+            runCatching {
+                composeRule.onNodeWithTag("workspace-close-open-file-README.txt").assertIsDisplayed()
+            }.isSuccess
+        }
+
+        composeRule.onNodeWithTag("workspace-close-open-file-README.txt").performClick()
+        composeRule.onAllNodesWithTag("workspace-close-open-file-README.txt").assertCountEquals(0)
+
+        // Clicking the filename still opens the file; the close control returns while its tab is open.
+        composeRule.onNodeWithTag("workspace-entry-README.txt").performClick()
+        waitForUiStage("README can be reopened after closing its tab") {
+            runCatching {
+                composeRule.onNodeWithTag("workspace-editor-input")
+                    .assertTextContains("Workspace fixture", substring = true)
+            }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-editor-back").performClick()
+        composeRule.onNodeWithTag("workspace-close-open-file-README.txt").assertIsDisplayed()
+    }
+
     private fun waitForUiStage(stage: String, timeoutMillis: Long = 5_000, condition: () -> Boolean) {
         try {
             composeRule.waitUntil(timeoutMillis = timeoutMillis, condition = condition)
