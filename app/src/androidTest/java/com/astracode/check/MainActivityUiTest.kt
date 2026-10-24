@@ -552,7 +552,7 @@ class MainActivityUiTest {
             composeRule.onNodeWithTag("workspace-editor-back").performClick()
         }
 
-        composeRule.onNodeWithTag("workspace-entry-tab-5.txt").performClick()
+        composeRule.onNodeWithTag("workspace-entry-tab-5.txt").performScrollTo().performClick()
         composeRule.onNodeWithTag("workspace-browser-message").assertTextContains("up to 4 files")
         assertTrue(
             "The fifth file must not replace an open editor tab.",
