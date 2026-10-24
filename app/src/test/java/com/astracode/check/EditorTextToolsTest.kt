@@ -20,6 +20,41 @@ class EditorTextToolsTest {
     }
 
     @Test
+    fun braceFoldingIgnoresBracesInsideStringsAndComments() {
+        val source = "fun main() {\n    val marker = \"{ text }\"\n    /* } is not a block end */\n}\n"
+        val regions = findCodeFoldRegions(source)
+
+        assertEquals(1, regions.size)
+        assertEquals(1, regions.single().startLine)
+        assertEquals(4, regions.single().endLine)
+        assertEquals("fun main() {", regions.single().label)
+
+        val folded = codeFoldingVisualTransformation(regions, setOf(1)).filter(AnnotatedString(source))
+        assertEquals("1 │ fun main() { … 3 lines folded …\n5 │ ", folded.text.text)
+        assertEquals(4, folded.offsetMapping.originalToTransformed(0))
+        for (offset in 0..source.length) {
+            assertTrue(folded.offsetMapping.originalToTransformed(offset) in 0..folded.text.length)
+        }
+        for (offset in 0..folded.text.length) {
+            assertTrue(folded.offsetMapping.transformedToOriginal(offset) in 0..source.length)
+        }
+    }
+
+    @Test
+    fun braceFoldingFindsNestedRegionsAndKeepsLogicalLineNumbers() {
+        val source = "fun outer() {\n    if (true) {\n        println(\"ok\")\n    }\n}\n"
+        val regions = findCodeFoldRegions(source)
+
+        assertEquals(2, regions.size)
+        assertEquals(1, regions[0].startLine)
+        assertEquals(5, regions[0].endLine)
+        assertEquals(2, regions[1].startLine)
+        assertEquals(4, regions[1].endLine)
+        val folded = codeFoldingVisualTransformation(regions, setOf(1)).filter(AnnotatedString(source))
+        assertEquals("1 │ fun outer() { … 4 lines folded …\n6 │ ", folded.text.text)
+    }
+
+    @Test
     fun findNextAndPreviousWrapAndSelectLiteralMatches() {
         val value = TextFieldValue("x + y\nx + z\n", selection = TextRange(0))
 

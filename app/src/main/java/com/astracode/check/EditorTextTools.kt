@@ -7,49 +7,152 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 
-internal fun lineNumberVisualTransformation(): VisualTransformation = VisualTransformation { input ->
-    val original = input.text
-    val lineCount = original.count { it == '\n' } + 1
-    val digitWidth = lineCount.toString().length
-    val linePrefixWidth = digitWidth + 3
-    val offsets = IntArray(original.length + 1)
-    val transformed = StringBuilder(original.length + lineCount * linePrefixWidth)
-    var lineStart = 0
-    var lineNumber = 1
+internal data class CodeFoldRegion(
+    val startLine: Int,
+    val endLine: Int,
+    val startOffset: Int,
+    val endOffset: Int,
+    val label: String,
+) {
+    val hiddenLineCount: Int get() = endLine - startLine
+}
 
-    for (index in 0..original.length) {
-        if (index == lineStart) {
-            transformed.append(lineNumber.toString().padStart(digitWidth)).append(" │ ")
-            lineNumber++
+/**
+ * Finds multiline brace-delimited regions without treating braces inside strings or comments as code.
+ * Folding changes only the visual transformation; the original source buffer remains unchanged.
+ */
+internal fun findCodeFoldRegions(text: String): List<CodeFoldRegion> {
+    if (text.isEmpty()) return emptyList()
+    val lineStarts = mutableListOf(0)
+    text.forEachIndexed { index, character -> if (character == '\n') lineStarts += index + 1 }
+    fun lineForOffset(offset: Int): Int {
+        var low = 0
+        var high = lineStarts.lastIndex
+        while (low <= high) {
+            val middle = (low + high) ushr 1
+            if (lineStarts[middle] <= offset) low = middle + 1 else high = middle - 1
         }
-        offsets[index] = transformed.length
-        if (index < original.length) {
-            val character = original[index]
-            transformed.append(character)
-            if (character == '\n') lineStart = index + 1
+        return high + 1
+    }
+
+    val opens = mutableListOf<Int>()
+    val pairs = mutableListOf<Pair<Int, Int>>()
+    var mode = 0 // code, line comment, block comment, string, char, triple string, quoted identifier
+    var blockDepth = 0
+    var i = 0
+    while (i < text.length) {
+        val c = text[i]
+        when (mode) {
+            1 -> { if (c == '\n') mode = 0; i++ }
+            2 -> {
+                if (c == '/' && text.getOrNull(i + 1) == '*') { blockDepth++; i += 2 }
+                else if (c == '*' && text.getOrNull(i + 1) == '/') {
+                    blockDepth--; i += 2; if (blockDepth == 0) mode = 0
+                } else i++
+            }
+            3, 4 -> {
+                val quote = if (mode == 3) '"' else '\''
+                if (c == '\\') i = (i + 2).coerceAtMost(text.length)
+                else { if (c == quote) mode = 0; i++ }
+            }
+            5 -> { if (text.startsWith("\"\"\"", i)) { mode = 0; i += 3 } else i++ }
+            6 -> { if (c.code == 96) mode = 0; i++ }
+            else -> when {
+                c == '/' && text.getOrNull(i + 1) == '/' -> { mode = 1; i += 2 }
+                c == '/' && text.getOrNull(i + 1) == '*' -> { mode = 2; blockDepth = 1; i += 2 }
+                c == '#' -> { mode = 1; i++ }
+                c == '"' && text.startsWith("\"\"\"", i) -> { mode = 5; i += 3 }
+                c == '"' -> { mode = 3; i++ }
+                c == '\'' -> { mode = 4; i++ }
+                c.code == 96 -> { mode = 6; i++ }
+                c == '{' -> { opens += i; i++ }
+                c == '}' -> {
+                    if (opens.isNotEmpty()) pairs += opens.removeAt(opens.lastIndex) to i
+                    i++
+                }
+                else -> i++
+            }
         }
     }
 
-    val transformedText = transformed.toString()
-    TransformedText(
-        text = AnnotatedString(transformedText),
-        offsetMapping = object : OffsetMapping {
-            override fun originalToTransformed(offset: Int): Int =
-                offsets[offset.coerceIn(0, original.length)]
-
-            override fun transformedToOriginal(offset: Int): Int {
-                val target = offset.coerceIn(0, transformedText.length)
-                var low = 0
-                var high = offsets.lastIndex
-                while (low < high) {
-                    val middle = (low + high) ushr 1
-                    if (offsets[middle] < target) low = middle + 1 else high = middle
-                }
-                return low
-            }
-        },
-    )
+    return pairs.mapNotNull { (open, close) ->
+        val startLine = lineForOffset(open)
+        val endLine = lineForOffset(close)
+        if (endLine <= startLine + 1) null
+        else {
+            val start = lineStarts[startLine - 1]
+            val newline = text.indexOf('\n', start)
+            val end = if (newline < 0) text.length else newline
+            val header = text.substring(start, end).trim().replace(Regex("\\s+"), " ")
+            CodeFoldRegion(startLine, endLine, open, close, header.take(36) + if (header.length > 36) "…" else "")
+        }
+    }.sortedWith(compareBy<CodeFoldRegion> { it.startLine }.thenByDescending { it.endLine })
+        .distinctBy { it.startLine }
 }
+
+internal fun lineNumberVisualTransformation(): VisualTransformation =
+    codeFoldingVisualTransformation(emptyList(), emptySet())
+
+internal fun codeFoldingVisualTransformation(
+    foldableRegions: List<CodeFoldRegion>,
+    collapsedLineStarts: Set<Int>,
+): VisualTransformation = VisualTransformation { input ->
+    val text = input.text
+    val starts = mutableListOf(0)
+    text.forEachIndexed { index, character -> if (character == '\n') starts += index + 1 }
+    val lineCount = starts.size
+    val digitWidth = lineCount.toString().length
+    val collapsedEnds = foldableRegions.filter {
+        it.startLine in collapsedLineStarts && it.startLine in 1..lineCount &&
+            it.endLine in (it.startLine + 1)..lineCount &&
+            text.getOrNull(it.startOffset) == '{' && text.getOrNull(it.endOffset) == '}'
+    }.associate { it.startLine to it.endLine }
+
+    val offsets = IntArray(text.length + 1)
+    val output = StringBuilder(text.length + lineCount * (digitWidth + 3))
+    var hiddenThrough = 0
+    for (lineIndex in starts.indices) {
+        val line = lineIndex + 1
+        val start = starts[lineIndex]
+        val hasNewline = lineIndex < starts.lastIndex
+        val end = if (hasNewline) starts[lineIndex + 1] - 1 else text.length
+        if (line <= hiddenThrough) {
+            for (offset in start until end) offsets[offset] = output.length
+            offsets[end] = output.length
+            continue
+        }
+        output.append(line.toString().padStart(digitWidth)).append(" │ ")
+        offsets[start] = output.length
+        for (offset in start until end) {
+            offsets[offset] = output.length
+            output.append(text[offset])
+        }
+        val foldEnd = collapsedEnds[line]
+        if (foldEnd != null && foldEnd > line) {
+            output.append(" … ").append(foldEnd - line).append(" lines folded …")
+            hiddenThrough = maxOf(hiddenThrough, foldEnd)
+        }
+        offsets[end] = output.length
+        if (hasNewline) output.append('\n')
+    }
+    offsets[text.length] = output.length
+    val transformed = output.toString()
+    TransformedText(AnnotatedString(transformed), object : OffsetMapping {
+        override fun originalToTransformed(offset: Int): Int =
+            offsets[offset.coerceIn(0, text.length)]
+        override fun transformedToOriginal(offset: Int): Int {
+            val target = offset.coerceIn(0, transformed.length)
+            var low = 0
+            var high = offsets.lastIndex
+            while (low < high) {
+                val middle = (low + high) ushr 1
+                if (offsets[middle] < target) low = middle + 1 else high = middle
+            }
+            return low
+        }
+    })
+}
+
 
 internal fun countMatches(text: String, query: String): Int {
     if (query.isEmpty()) return 0

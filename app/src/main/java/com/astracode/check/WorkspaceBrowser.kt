@@ -160,11 +160,22 @@ internal fun WorkspaceBrowserPanel(
     val savedText = activeEditorTab?.savedText.orEmpty()
     val loading = activeEditorTab?.isLoading ?: false
     var editorFieldValue by remember(openedFile) { mutableStateOf(TextFieldValue(editorText)) }
+    var collapsedFoldStarts by remember(openedFile, editorFieldValue.text) { mutableStateOf(emptySet<Int>()) }
+    val foldableRegions = remember(editorFieldValue.text) { findCodeFoldRegions(editorFieldValue.text) }
+    val visibleFoldableRegions = foldableRegions.filter { candidate ->
+        foldableRegions.none { parent ->
+            parent.startLine in collapsedFoldStarts &&
+                parent.startLine < candidate.startLine &&
+                parent.endLine >= candidate.startLine
+        }
+    }
     var showFindReplace by remember(openedFile) { mutableStateOf(false) }
     var findQuery by remember(openedFile) { mutableStateOf("") }
     var replacementText by remember(openedFile) { mutableStateOf("") }
     val editorFocusRequester = remember { FocusRequester() }
-    val lineNumberTransformation = remember { lineNumberVisualTransformation() }
+    val lineNumberTransformation = remember(foldableRegions, collapsedFoldStarts) {
+        codeFoldingVisualTransformation(foldableRegions, collapsedFoldStarts)
+    }
 
     LaunchedEffect(openedFile, editorText) {
         if (editorFieldValue.text != editorText) {
@@ -807,6 +818,33 @@ internal fun WorkspaceBrowserPanel(
                             enabled = findQuery.isNotEmpty() && !replacingOldestTab,
                             modifier = Modifier.testTag("workspace-editor-replace-all"),
                         ) { Text("Replace all") }
+                    }
+                }
+            }
+            if (visibleFoldableRegions.isNotEmpty()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    visibleFoldableRegions.forEach { region ->
+                        val isCollapsed = region.startLine in collapsedFoldStarts
+                        TextButton(
+                            onClick = {
+                                collapsedFoldStarts = if (isCollapsed) {
+                                    collapsedFoldStarts - region.startLine
+                                } else {
+                                    collapsedFoldStarts + region.startLine
+                                }
+                            },
+                            modifier = Modifier.testTag("workspace-fold-toggle-${region.startLine}"),
+                        ) {
+                            Text(
+                                "${if (isCollapsed) "▸" else "▾"} L${region.startLine} ${region.label}",
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
                 }
             }

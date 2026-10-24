@@ -707,6 +707,34 @@ class MainActivityUiTest {
         composeRule.onNodeWithTag("workspace-tab-close-README.txt").assertIsDisplayed()
     }
 
+    @Test
+    fun workspaceEditorCanCollapseAndExpandCodeWithoutChangingSourceText() {
+        val sample = File(workspaceRoot, "FoldSample.kt")
+        val source = "fun main() {\n    println(\"first\")\n    println(\"second\")\n}\n"
+        sample.writeText(source)
+        composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
+        waitForUiStage("fold sample appears") {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-FoldSample.kt").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-entry-FoldSample.kt").performClick()
+        waitForUiStage("fold sample editor opens") {
+            runCatching {
+                composeRule.onNodeWithTag("workspace-editor-input")
+                    .assertTextContains("fun main()", substring = true)
+            }.isSuccess
+        }
+
+        val foldButton = composeRule.onNodeWithTag("workspace-fold-toggle-1")
+        foldButton.assertIsDisplayed()
+        foldButton.performClick()
+        foldButton.assertTextContains("▸", substring = true)
+        assertEquals(source, sample.readText())
+
+        foldButton.performClick()
+        foldButton.assertTextContains("▾", substring = true)
+        assertEquals(source, sample.readText())
+    }
+
     private fun waitForUiStage(stage: String, timeoutMillis: Long = 5_000, condition: () -> Boolean) {
         try {
             composeRule.waitUntil(timeoutMillis = timeoutMillis, condition = condition)
