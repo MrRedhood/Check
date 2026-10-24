@@ -217,7 +217,7 @@ internal fun WorkspaceBrowserPanel(
                 }
             }
 
-            Result.success(
+            return Result.success(
                 WorkspaceEditorSaveOutcome(
                     linkedSyncSucceeded = syncResult.isSuccess,
                     linkedSyncError = syncResult.exceptionOrNull()?.message,
