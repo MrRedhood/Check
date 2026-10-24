@@ -450,16 +450,27 @@ internal fun WorkspaceBrowserPanel(
                             val path = openedFile ?: return@Button
                             val contentToSave = editorText
                             scope.launch {
-                                runCatching { withContext(Dispatchers.IO) { writeWorkspaceText(root, path, contentToSave) } }
-                                    .onSuccess {
-                                        editorTabs = editorTabs.map { tab ->
-                                            if (tab.path == path) tab.copy(savedText = contentToSave) else tab
+                                runCatching {
+                                    withContext(Dispatchers.IO) {
+                                        writeWorkspaceText(root, path, contentToSave)
+                                        runCatching {
+                                            syncLinkedWorkspacePaths(root, externalRoot, syncedPaths, path)
                                         }
-                                        syncLinkedWorkspacePaths(root, externalRoot, syncedPaths, path)
-                                        refreshKey++
-                                        message = "Saved " + path.substringAfterLast('/')
                                     }
-                                    .onFailure { error -> message = error.message ?: "Could not save this file." }
+                                }.onSuccess { syncResult ->
+                                    editorTabs = editorTabs.map { tab ->
+                                        if (tab.path == path) tab.copy(savedText = contentToSave) else tab
+                                    }
+                                    refreshKey++
+                                    message = if (syncResult.isSuccess) {
+                                        "Saved " + path.substringAfterLast('/')
+                                    } else {
+                                        "Saved locally, but the linked copy could not be updated: " +
+                                            (syncResult.exceptionOrNull()?.message ?: "sync error")
+                                    }
+                                }.onFailure { error ->
+                                    message = error.message ?: "Could not save this file."
+                                }
                             }
                         },
                         enabled = !loading && editorText != savedText,
