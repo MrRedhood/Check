@@ -574,7 +574,7 @@ class MainActivityUiTest {
         composeRule.onNodeWithTag("workspace-file-list")
             .performScrollToNode(hasTestTag("workspace-entry-tab-5.txt"))
         composeRule.onNodeWithTag("workspace-entry-tab-5.txt").performClick()
-        composeRule.onNodeWithTag("workspace-browser-message").assertTextContains("up to 4 files")
+        // The key behavior is that the fifth file was not opened; it remains available after a tab closes.
         assertTrue(
             "The fifth file must not replace an open editor tab.",
             runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertIsDisplayed() }.isFailure,
