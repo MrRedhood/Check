@@ -461,6 +461,114 @@ class MainActivityUiTest {
         composeRule.onNodeWithText("Move to Trash").fetchSemanticsNode()
     }
 
+
+    @Test
+    fun multipleEditorTabsPreserveDraftsAndSaveToTheCorrectFiles() {
+        composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
+        waitForUiStage("workspace root") {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-README.txt").assertIsDisplayed() }.isSuccess
+        }
+
+        composeRule.onNodeWithTag("workspace-entry-README.txt").performClick()
+        waitForUiStage("README editor loaded") {
+            runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("Workspace fixture") }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-editor-input").performTextReplacement("README unsaved draft")
+
+        composeRule.onNodeWithTag("workspace-editor-back").performClick()
+        composeRule.onNodeWithTag("workspace-entry-app").performClick()
+        waitForUiStage("app source folder") {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-src").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-entry-src").performClick()
+        waitForUiStage("Main.kt row") {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-Main.kt").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-entry-Main.kt").performClick()
+        waitForUiStage("Main.kt editor loaded") {
+            runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("fun main() = Unit") }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-editor-input").performTextReplacement("fun main() = 42")
+
+        composeRule.onNodeWithTag("workspace-tab-README.txt").performClick()
+        composeRule.onNodeWithTag("workspace-editor-input").assertTextEquals("README unsaved draft")
+        composeRule.onNodeWithTag("workspace-tab-app__src__Main.kt").performClick()
+        composeRule.onNodeWithTag("workspace-editor-input").assertTextEquals("fun main() = 42")
+
+        composeRule.onNodeWithTag("workspace-save-file").performClick()
+        waitForUiStage("Main.kt saved") {
+            File(workspaceRoot, "app/src/Main.kt").takeIf { it.isFile }?.readText() == "fun main() = 42"
+        }
+        composeRule.onNodeWithTag("workspace-tab-README.txt").performClick()
+        composeRule.onNodeWithTag("workspace-editor-input").assertTextEquals("README unsaved draft")
+        composeRule.onNodeWithTag("workspace-save-file").performClick()
+        waitForUiStage("README saved") {
+            File(workspaceRoot, "README.txt").takeIf { it.isFile }?.readText() == "README unsaved draft"
+        }
+
+        assertEquals("fun main() = 42", File(workspaceRoot, "app/src/Main.kt").readText())
+        assertEquals("README unsaved draft", File(workspaceRoot, "README.txt").readText())
+    }
+
+    @Test
+    fun dirtyEditorTabRequiresConfirmationBeforeClosing() {
+        composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
+        waitForUiStage("README row") {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-README.txt").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-entry-README.txt").performClick()
+        waitForUiStage("README editor") {
+            runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-editor-input").performTextReplacement("unsaved and should be discarded")
+
+        composeRule.onNodeWithTag("workspace-tab-close-README.txt").performClick()
+        composeRule.onNodeWithTag("workspace-tab-discard-cancel").performClick()
+        composeRule.onNodeWithTag("workspace-editor-input").assertTextEquals("unsaved and should be discarded")
+
+        composeRule.onNodeWithTag("workspace-tab-close-README.txt").performClick()
+        composeRule.onNodeWithTag("workspace-tab-discard-confirm").performClick()
+        waitForUiStage("returned to files after closing final tab") {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-README.txt").assertIsDisplayed() }.isSuccess
+        }
+        assertEquals("Workspace fixture\n", File(workspaceRoot, "README.txt").readText())
+    }
+
+    @Test
+    fun editorCapsOpenTabsAndAllowsAnotherFileAfterClosingOne() {
+        (1..5).forEach { index ->
+            File(workspaceRoot, "tab-$index.txt").writeText("tab content $index")
+        }
+        composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
+
+        (1..4).forEach { index ->
+            waitForUiStage("tab $index row") {
+                runCatching { composeRule.onNodeWithTag("workspace-entry-tab-$index.txt").assertIsDisplayed() }.isSuccess
+            }
+            composeRule.onNodeWithTag("workspace-entry-tab-$index.txt").performClick()
+            waitForUiStage("tab $index loaded") {
+                runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("tab content $index") }.isSuccess
+            }
+            composeRule.onNodeWithTag("workspace-editor-back").performClick()
+        }
+
+        composeRule.onNodeWithTag("workspace-entry-tab-5.txt").performClick()
+        composeRule.onNodeWithTag("workspace-browser-message").assertTextContains("up to 4 files")
+        assertTrue(
+            "The fifth file must not replace an open editor tab.",
+            runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertIsDisplayed() }.isFailure,
+        )
+
+        composeRule.onNodeWithTag("workspace-entry-tab-1.txt").performClick()
+        composeRule.onNodeWithTag("workspace-tab-close-tab-1.txt").performClick()
+        composeRule.onNodeWithTag("workspace-editor-back").performClick()
+        composeRule.onNodeWithTag("workspace-entry-tab-5.txt").performClick()
+        waitForUiStage("fifth file opens after a tab is closed") {
+            runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("tab content 5") }.isSuccess
+        }
+        assertEquals(5, (1..5).count { File(workspaceRoot, "tab-$it.txt").isFile })
+    }
+
     private fun waitForUiStage(stage: String, timeoutMillis: Long = 5_000, condition: () -> Boolean) {
         try {
             composeRule.waitUntil(timeoutMillis = timeoutMillis, condition = condition)
