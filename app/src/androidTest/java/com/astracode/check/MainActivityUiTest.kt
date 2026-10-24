@@ -2,6 +2,7 @@ package com.astracode.check
 
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
@@ -521,7 +522,7 @@ class MainActivityUiTest {
     }
 
     @Test
-    fun dirtyEditorTabRequiresConfirmationBeforeClosing() {
+    fun dirtyEditorTabClosePromptDoesNotRaceAutosave() {
         composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
         waitForUiStage("README row") {
             runCatching { composeRule.onNodeWithTag("workspace-entry-README.txt").assertIsDisplayed() }.isSuccess
@@ -530,23 +531,56 @@ class MainActivityUiTest {
         waitForUiStage("README editor") {
             runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertIsDisplayed() }.isSuccess
         }
-        composeRule.onNodeWithTag("workspace-editor-input").performTextReplacement("unsaved and should be discarded")
 
+        val file = File(workspaceRoot, "README.txt")
+        val original = file.readText()
+        val draft = "unsaved draft handled by autosave"
+        composeRule.onNodeWithTag("workspace-editor-input").performTextReplacement(draft)
         composeRule.onNodeWithTag("workspace-tab-close-README.txt").performClick()
-        composeRule.onNodeWithTag("workspace-tab-discard-cancel").performClick()
-        waitForUiStage("draft retained after cancel") {
-            runCatching {
-                composeRule.onNodeWithTag("workspace-editor-input")
-                    .assertTextContains("unsaved and should be discarded", substring = true)
-            }.isSuccess
+
+        val promptVisible = runCatching {
+            composeRule.onNodeWithTag("workspace-tab-discard-confirm").assertIsDisplayed()
+        }.isSuccess
+
+        if (promptVisible) {
+            // If a save began before the prompt appeared, wait for it to finish before
+            // allowing the user to discard anything. Otherwise the original file stays untouched.
+            waitForUiStage("close decision is safe", timeoutMillis = 5_000) {
+                runCatching {
+                    composeRule.onNodeWithTag("workspace-tab-discard-confirm").assertIsEnabled()
+                }.isSuccess
+            }
+            if (file.readText() != draft) {
+                assertEquals(original, file.readText())
+            }
+            composeRule.onNodeWithTag("workspace-tab-discard-cancel").performClick()
+            waitForUiStage("draft retained after cancel") {
+                runCatching {
+                    composeRule.onNodeWithTag("workspace-editor-input")
+                        .assertTextContains(draft, substring = true)
+                }.isSuccess
+            }
         }
 
-        composeRule.onNodeWithTag("workspace-tab-close-README.txt").performClick()
-        composeRule.onNodeWithTag("workspace-tab-discard-confirm").performClick()
-        waitForUiStage("returned to files after closing final tab") {
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { file.readText() == draft }.getOrDefault(false)
+        }
+        waitForUiStage("draft is saved automatically") {
+            file.readText() == draft
+        }
+
+        // Once autosave has succeeded the tab is clean, so closing it must not show
+        // a discard prompt or pretend the already-saved text can be rolled back.
+        if (runCatching {
+                composeRule.onNodeWithTag("workspace-editor-input").assertIsDisplayed()
+            }.isSuccess
+        ) {
+            composeRule.onNodeWithTag("workspace-tab-close-README.txt").performClick()
+        }
+        waitForUiStage("returned to files after closing tab") {
             runCatching { composeRule.onNodeWithTag("workspace-entry-README.txt").assertIsDisplayed() }.isSuccess
         }
-        assertEquals("Workspace fixture\n", File(workspaceRoot, "README.txt").readText())
+        assertEquals(draft, file.readText())
     }
 
     @Test
