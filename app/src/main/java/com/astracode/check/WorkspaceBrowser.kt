@@ -846,33 +846,11 @@ internal fun WorkspaceBrowserPanel(
                     }
                 }
             }
-            val editorInsertTokens = listOf("😀", "🎉", "✅", "🚀", "🔥", "→", "⇒", "λ", "π", "✓", "{}")
-            Row(
-                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                TextButton(
-                    onClick = { wordWrapEnabled = !wordWrapEnabled },
-                    enabled = !loading,
-                    modifier = Modifier.testTag("workspace-editor-word-wrap-toggle"),
-                ) { Text(if (wordWrapEnabled) "Word wrap: On" else "Word wrap: Off") }
-                editorInsertTokens.forEachIndexed { index, symbol ->
-                    TextButton(
-                        onClick = {
-                            val updated = insertTextAtSelection(editorFieldValue, symbol)
-                            if (updateEditorText(updated.text)) {
-                                editorFieldValue = updated
-                                editorFocusRequester.requestFocus()
-                            } else {
-                                message = "Could not insert the symbol because the editor safety limit was reached."
-                            }
-                        },
-                        enabled = !loading && !replacingOldestTab,
-                        modifier = Modifier.testTag("workspace-editor-insert-$index"),
-                    ) { Text(symbol) }
-                }
-            }
+            TextButton(
+                onClick = { wordWrapEnabled = !wordWrapEnabled },
+                enabled = !loading,
+                modifier = Modifier.testTag("workspace-editor-word-wrap-toggle"),
+            ) { Text(if (wordWrapEnabled) "Word wrap: On" else "Word wrap: Off") }
             Text(
                 "Autosave on · saves after typing pauses",
                 style = MaterialTheme.typography.bodySmall,

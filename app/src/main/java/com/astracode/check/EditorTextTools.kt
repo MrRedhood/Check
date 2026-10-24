@@ -154,18 +154,6 @@ internal fun codeFoldingVisualTransformation(
 }
 
 
-internal fun insertTextAtSelection(value: TextFieldValue, insertion: String): TextFieldValue {
-    val start = value.selection.min.coerceIn(0, value.text.length)
-    val end = value.selection.max.coerceIn(start, value.text.length)
-    val updatedText = value.text.replaceRange(start, end, insertion)
-    val cursor = start + insertion.length
-    return value.copy(
-        text = updatedText,
-        selection = TextRange(cursor),
-        composition = null,
-    )
-}
-
 internal fun countMatches(text: String, query: String): Int {
     if (query.isEmpty()) return 0
     var count = 0

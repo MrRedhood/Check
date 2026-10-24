@@ -13,6 +13,7 @@ import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.performTouchInput
@@ -752,7 +753,7 @@ class MainActivityUiTest {
         }
 
         composeRule.onNodeWithTag("workspace-editor-input").performTextReplacement("hello ")
-        composeRule.onNodeWithTag("workspace-editor-insert-0").performClick()
+        composeRule.onNodeWithTag("workspace-editor-input").performTextInput("😀")
         composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("hello 😀", substring = true)
 
         composeRule.onNodeWithTag("workspace-editor-word-wrap-toggle").assertTextContains("Word wrap: On")

@@ -55,17 +55,6 @@ class EditorTextToolsTest {
     }
 
     @Test
-    fun insertEmojiAndSymbolsAtSelectionPreservesUtf16CursorOffsets() {
-        val original = TextFieldValue("hello target", selection = TextRange(6, 12))
-
-        val updated = insertTextAtSelection(original, "😀→λ")
-
-        assertEquals("hello 😀→λ", updated.text)
-        assertEquals(TextRange(10), updated.selection)
-        assertEquals(null, updated.composition)
-    }
-
-    @Test
     fun findNextAndPreviousWrapAndSelectLiteralMatches() {
         val value = TextFieldValue("x + y\nx + z\n", selection = TextRange(0))
 
