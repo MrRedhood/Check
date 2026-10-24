@@ -545,7 +545,7 @@ class MainActivityUiTest {
             waitForUiStage("tab $index row") {
                 runCatching { composeRule.onNodeWithTag("workspace-entry-tab-$index.txt").assertIsDisplayed() }.isSuccess
             }
-            composeRule.onNodeWithTag("workspace-entry-tab-$index.txt").performClick()
+            composeRule.onNodeWithTag("workspace-entry-tab-$index.txt").performScrollTo().performClick()
             waitForUiStage("tab $index loaded") {
                 runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("tab content $index") }.isSuccess
             }
@@ -559,10 +559,10 @@ class MainActivityUiTest {
             runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertIsDisplayed() }.isFailure,
         )
 
-        composeRule.onNodeWithTag("workspace-entry-tab-1.txt").performClick()
+        composeRule.onNodeWithTag("workspace-entry-tab-1.txt").performScrollTo().performClick()
         composeRule.onNodeWithTag("workspace-tab-close-tab-1.txt").performClick()
         composeRule.onNodeWithTag("workspace-editor-back").performClick()
-        composeRule.onNodeWithTag("workspace-entry-tab-5.txt").performClick()
+        composeRule.onNodeWithTag("workspace-entry-tab-5.txt").performScrollTo().performClick()
         waitForUiStage("fifth file opens after a tab is closed") {
             runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("tab content 5") }.isSuccess
         }
