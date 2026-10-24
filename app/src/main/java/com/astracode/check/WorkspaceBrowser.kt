@@ -56,6 +56,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
@@ -68,6 +69,8 @@ private const val MAX_OPEN_EDITOR_TABS = 25
 private const val MAX_OPEN_EDITOR_BUFFER_CHARS = 16L * 1024L * 1024L
 private const val EDITOR_AUTOSAVE_DEBOUNCE_MS = 300L
 private const val EDITOR_AUTOSAVE_MAX_WAIT_MS = 15_000L
+private const val EDITOR_LOADING_TIMEOUT_MS = 15_000L
+private const val EDITOR_SAVE_TIMEOUT_MS = 15_000L
 
 private data class WorkspaceEditorSaveOutcome(
     val linkedSyncSucceeded: Boolean,
@@ -160,6 +163,8 @@ internal fun WorkspaceBrowserPanel(
     val savedText = activeEditorTab?.savedText.orEmpty()
     val loading = activeEditorTab?.isLoading ?: false
     var editorFieldValue by remember(openedFile) { mutableStateOf(TextFieldValue(editorText)) }
+    var wordWrapEnabled by remember(openedFile) { mutableStateOf(true) }
+    val editorHorizontalScrollState = rememberScrollState()
     var collapsedFoldStarts by remember(openedFile, editorFieldValue.text) { mutableStateOf(emptySet<Int>()) }
     val foldableRegions = remember(editorFieldValue.text) { findCodeFoldRegions(editorFieldValue.text) }
     val visibleFoldableRegions = foldableRegions.filter { candidate ->
@@ -220,17 +225,35 @@ internal fun WorkspaceBrowserPanel(
                 return Result.success(WorkspaceEditorSaveOutcome(linkedSyncSucceeded = true))
             }
 
-            val syncResult = try {
-                withContext(Dispatchers.IO) {
-                    writeWorkspaceText(root, path, contentToSave)
-                    runCatching {
-                        syncLinkedWorkspacePaths(root, externalRoot, syncedPaths, path)
+            val writeCompleted = try {
+                withTimeoutOrNull(EDITOR_SAVE_TIMEOUT_MS) {
+                    withContext(Dispatchers.IO) {
+                        writeWorkspaceText(root, path, contentToSave)
                     }
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
                 return Result.failure(error)
+            } ?: return Result.failure(
+                IOException("Saving timed out after 15 seconds. Your draft remains open; try saving again."),
+            )
+
+            val syncResult = try {
+                val syncCompleted = withTimeoutOrNull(EDITOR_SAVE_TIMEOUT_MS) {
+                    withContext(Dispatchers.IO) {
+                        syncLinkedWorkspacePaths(root, externalRoot, syncedPaths, path)
+                    }
+                }
+                if (syncCompleted == null) {
+                    Result.failure(IOException("Linked workspace sync timed out; the file was saved locally."))
+                } else {
+                    Result.success(Unit)
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Result.failure(error)
             }
 
             val stillOpen = editorTabs.firstOrNull { it.path == path }
@@ -435,7 +458,9 @@ internal fun WorkspaceBrowserPanel(
         val tab = editorTabs.firstOrNull { it.path == path } ?: return@LaunchedEffect
         if (!tab.isLoading) return@LaunchedEffect
         try {
-            val text = withContext(Dispatchers.IO) { readWorkspaceText(root, path) }
+            val text = withTimeoutOrNull(EDITOR_LOADING_TIMEOUT_MS) {
+                withContext(Dispatchers.IO) { readWorkspaceText(root, path) }
+            } ?: throw IOException("Opening this file timed out after 15 seconds. Try opening it again.")
             val otherBufferChars = editorTabs.asSequence()
                 .filterNot { it.path == path }
                 .sumOf { it.text.length.toLong() + it.savedText.length.toLong() }
@@ -821,6 +846,38 @@ internal fun WorkspaceBrowserPanel(
                     }
                 }
             }
+            val editorInsertTokens = listOf("😀", "🎉", "✅", "🚀", "🔥", "→", "⇒", "λ", "π", "✓", "{}")
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(
+                    onClick = { wordWrapEnabled = !wordWrapEnabled },
+                    enabled = !loading,
+                    modifier = Modifier.testTag("workspace-editor-word-wrap-toggle"),
+                ) { Text(if (wordWrapEnabled) "Word wrap: On" else "Word wrap: Off") }
+                editorInsertTokens.forEachIndexed { index, symbol ->
+                    TextButton(
+                        onClick = {
+                            val updated = insertTextAtSelection(editorFieldValue, symbol)
+                            if (updateEditorText(updated.text)) {
+                                editorFieldValue = updated
+                                editorFocusRequester.requestFocus()
+                            } else {
+                                message = "Could not insert the symbol because the editor safety limit was reached."
+                            }
+                        },
+                        enabled = !loading && !replacingOldestTab,
+                        modifier = Modifier.testTag("workspace-editor-insert-$index"),
+                    ) { Text(symbol) }
+                }
+            }
+            Text(
+                "Autosave on · saves after typing pauses",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.testTag("workspace-editor-autosave-status"),
+            )
             if (visibleFoldableRegions.isNotEmpty()) {
                 Row(
                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -869,6 +926,10 @@ internal fun WorkspaceBrowserPanel(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
+                        .then(
+                            if (wordWrapEnabled) Modifier
+                            else Modifier.horizontalScroll(editorHorizontalScrollState),
+                        )
                         .focusRequester(editorFocusRequester)
                         .testTag("workspace-editor-input"),
                     label = { Text("File contents") },

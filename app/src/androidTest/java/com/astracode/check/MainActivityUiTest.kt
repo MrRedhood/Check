@@ -735,6 +735,39 @@ class MainActivityUiTest {
         assertEquals(source, sample.readText())
     }
 
+    @Test
+    fun workspaceEditorInsertsEmojiAndSymbolsTogglesWordWrapAndAutosaves() {
+        val sample = File(workspaceRoot, "UnicodeEditor.txt")
+        sample.writeText("start")
+        composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
+        waitForUiStage("unicode editor file appears") {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-UnicodeEditor.txt").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-entry-UnicodeEditor.txt").performClick()
+        waitForUiStage("unicode editor is ready") {
+            runCatching {
+                composeRule.onNodeWithTag("workspace-editor-input")
+                    .assertTextContains("start", substring = true)
+            }.isSuccess
+        }
+
+        composeRule.onNodeWithTag("workspace-editor-input").performTextReplacement("hello ")
+        composeRule.onNodeWithTag("workspace-editor-insert-0").performClick()
+        composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("hello 😀", substring = true)
+
+        composeRule.onNodeWithTag("workspace-editor-word-wrap-toggle").assertTextContains("Word wrap: On")
+        composeRule.onNodeWithTag("workspace-editor-word-wrap-toggle").performClick()
+        composeRule.onNodeWithTag("workspace-editor-word-wrap-toggle").assertTextContains("Word wrap: Off")
+        composeRule.onNodeWithTag("workspace-editor-word-wrap-toggle").performClick()
+        composeRule.onNodeWithTag("workspace-editor-word-wrap-toggle").assertTextContains("Word wrap: On")
+        composeRule.onNodeWithTag("workspace-editor-autosave-status").assertTextContains("Autosave on")
+
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            sample.readText() == "hello 😀"
+        }
+        assertEquals("hello 😀", sample.readText())
+    }
+
     private fun waitForUiStage(stage: String, timeoutMillis: Long = 5_000, condition: () -> Boolean) {
         try {
             composeRule.waitUntil(timeoutMillis = timeoutMillis, condition = condition)
