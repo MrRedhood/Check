@@ -660,7 +660,7 @@ class MainActivityUiTest {
     }
 
     @Test
-    fun workspaceRowsCanCloseAndReopenEditorTabs() {
+    fun editorTabsCanCloseAndFilesCanReopenFromWorkspace() {
         composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
         waitForUiStage("README row") {
             runCatching { composeRule.onNodeWithTag("workspace-entry-README.txt").assertIsDisplayed() }.isSuccess
@@ -673,26 +673,38 @@ class MainActivityUiTest {
                     .assertTextContains("Workspace fixture", substring = true)
             }.isSuccess
         }
-        composeRule.onNodeWithTag("workspace-editor-back").performClick()
-        waitForUiStage("Workspace row returns with its open-file close control") {
-            runCatching {
-                composeRule.onNodeWithTag("workspace-close-open-file-README.txt").assertIsDisplayed()
-            }.isSuccess
-        }
+        composeRule.onNodeWithTag("workspace-tab-close-README.txt").assertIsDisplayed()
 
-        composeRule.onNodeWithTag("workspace-close-open-file-README.txt").performClick()
+        // Returning to Workspace hides editor tabs; Workspace rows themselves have no close button.
+        composeRule.onNodeWithTag("workspace-editor-back").performClick()
+        waitForUiStage("Workspace row returns") {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-README.txt").assertIsDisplayed() }.isSuccess
+        }
         composeRule.onAllNodesWithTag("workspace-close-open-file-README.txt").assertCountEquals(0)
 
-        // Clicking the filename still opens the file; the close control returns while its tab is open.
         composeRule.onNodeWithTag("workspace-entry-README.txt").performClick()
-        waitForUiStage("README can be reopened after closing its tab") {
+        waitForUiStage("README editor reselected") {
             runCatching {
                 composeRule.onNodeWithTag("workspace-editor-input")
                     .assertTextContains("Workspace fixture", substring = true)
             }.isSuccess
         }
-        composeRule.onNodeWithTag("workspace-editor-back").performClick()
-        composeRule.onNodeWithTag("workspace-close-open-file-README.txt").assertIsDisplayed()
+        composeRule.onNodeWithTag("workspace-tab-close-README.txt").performClick()
+        waitForUiStage("README row returns after closing its editor tab") {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-README.txt").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onAllNodesWithTag("workspace-tab-close-README.txt").assertCountEquals(0)
+        composeRule.onAllNodesWithTag("workspace-close-open-file-README.txt").assertCountEquals(0)
+
+        // Files remain in Workspace after closing, and opening one again creates a new editor tab.
+        composeRule.onNodeWithTag("workspace-entry-README.txt").performClick()
+        waitForUiStage("README reopened in editor") {
+            runCatching {
+                composeRule.onNodeWithTag("workspace-editor-input")
+                    .assertTextContains("Workspace fixture", substring = true)
+            }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-tab-close-README.txt").assertIsDisplayed()
     }
 
     private fun waitForUiStage(stage: String, timeoutMillis: Long = 5_000, condition: () -> Boolean) {

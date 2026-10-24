@@ -1118,24 +1118,7 @@ internal fun WorkspaceBrowserPanel(
                         )
                         Spacer(Modifier.padding(4.dp))
                         Column(modifier = Modifier.weight(1f)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(2.dp),
-                            ) {
-                                Text(
-                                    entry.name,
-                                    modifier = Modifier.weight(1f),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                if (!selectionMode && !entry.isDirectory && editorTabs.any { it.path == entry.path }) {
-                                    TextButton(
-                                        onClick = { requestCloseEditorTab(entry.path) },
-                                        enabled = savingEditorPath != entry.path && !replacingOldestTab,
-                                        modifier = Modifier.testTag("workspace-close-open-file-" + entry.name),
-                                    ) { Text("×") }
-                                }
-                            }
+                            Text(entry.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             val detail = when {
                                 entry.isDirectory -> {
                                     val count = folderCounts[entry.path] ?: 0
