@@ -827,7 +827,7 @@ internal fun WorkspaceBrowserPanel(
                 }
             }
             if (entries.isEmpty() && message.isBlank()) Text("This folder is empty.", modifier = Modifier.testTag("workspace-empty-folder"))
-            LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f).testTag("workspace-file-list"), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 items(entries, key = { it.path }) { entry ->
                     Row(
                         modifier = Modifier.fillMaxWidth()

@@ -6,6 +6,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertTextEquals
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performScrollTo
@@ -530,7 +532,12 @@ class MainActivityUiTest {
 
         composeRule.onNodeWithTag("workspace-tab-close-README.txt").performClick()
         composeRule.onNodeWithTag("workspace-tab-discard-cancel").performClick()
-        composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("unsaved and should be discarded", substring = true)
+        waitForUiStage("draft retained after cancel") {
+            runCatching {
+                composeRule.onNodeWithTag("workspace-editor-input")
+                    .assertTextContains("unsaved and should be discarded", substring = true)
+            }.isSuccess
+        }
 
         composeRule.onNodeWithTag("workspace-tab-close-README.txt").performClick()
         composeRule.onNodeWithTag("workspace-tab-discard-confirm").performClick()
@@ -547,30 +554,38 @@ class MainActivityUiTest {
         }
         composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
 
+        waitForUiStage("workspace file list") {
+            runCatching { composeRule.onNodeWithTag("workspace-file-list").assertIsDisplayed() }.isSuccess
+        }
+
         (1..4).forEach { index ->
-            waitForUiStage("tab $index row") {
-                runCatching {
-                    composeRule.onNodeWithTag("workspace-entry-tab-$index.txt").performScrollTo().assertIsDisplayed()
-                }.isSuccess
-            }
-            composeRule.onNodeWithTag("workspace-entry-tab-$index.txt").performScrollTo().performClick()
+            composeRule.onNodeWithTag("workspace-file-list")
+                .performScrollToNode(hasTestTag("workspace-entry-tab-$index.txt"))
+            composeRule.onNodeWithTag("workspace-entry-tab-$index.txt").performClick()
             waitForUiStage("tab $index loaded") {
-                runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("tab content $index") }.isSuccess
+                runCatching {
+                    composeRule.onNodeWithTag("workspace-editor-input")
+                        .assertTextContains("tab content $index", substring = true)
+                }.isSuccess
             }
             composeRule.onNodeWithTag("workspace-editor-back").performClick()
         }
 
-        composeRule.onNodeWithTag("workspace-entry-tab-5.txt").performScrollTo().performClick()
+        composeRule.onNodeWithTag("workspace-file-list")
+            .performScrollToNode(hasTestTag("workspace-entry-tab-5.txt"))
+        composeRule.onNodeWithTag("workspace-entry-tab-5.txt").performClick()
         composeRule.onNodeWithTag("workspace-browser-message").assertTextContains("up to 4 files")
         assertTrue(
             "The fifth file must not replace an open editor tab.",
             runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertIsDisplayed() }.isFailure,
         )
 
-        composeRule.onNodeWithTag("workspace-entry-tab-1.txt").performScrollTo().performClick()
+        composeRule.onNodeWithTag("workspace-file-list").performScrollToNode(hasTestTag("workspace-entry-tab-1.txt"))
+        composeRule.onNodeWithTag("workspace-entry-tab-1.txt").performClick()
         composeRule.onNodeWithTag("workspace-tab-close-tab-1.txt").performClick()
         composeRule.onNodeWithTag("workspace-editor-back").performClick()
-        composeRule.onNodeWithTag("workspace-entry-tab-5.txt").performScrollTo().performClick()
+        composeRule.onNodeWithTag("workspace-file-list").performScrollToNode(hasTestTag("workspace-entry-tab-5.txt"))
+        composeRule.onNodeWithTag("workspace-entry-tab-5.txt").performClick()
         waitForUiStage("fifth file opens after a tab is closed") {
             runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("tab content 5") }.isSuccess
         }
