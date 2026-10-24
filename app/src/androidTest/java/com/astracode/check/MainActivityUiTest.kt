@@ -548,17 +548,16 @@ class MainActivityUiTest {
     }
 
     @Test
-    fun editorCapsOpenTabsAndAllowsAnotherFileAfterClosingOne() {
-        (1..5).forEach { index ->
+    fun editorKeeps25TabsAndAutoSavesOldestBeforeOpening26th() {
+        (1..26).forEach { index ->
             File(workspaceRoot, "tab-$index.txt").writeText("tab content $index")
         }
         composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
-
         waitForUiStage("workspace file list") {
             runCatching { composeRule.onNodeWithTag("workspace-file-list").assertIsDisplayed() }.isSuccess
         }
 
-        (1..4).forEach { index ->
+        (1..25).forEach { index ->
             composeRule.onNodeWithTag("workspace-file-list")
                 .performScrollToNode(hasTestTag("workspace-entry-tab-$index.txt"))
             composeRule.onNodeWithTag("workspace-entry-tab-$index.txt").performClick()
@@ -571,25 +570,56 @@ class MainActivityUiTest {
             composeRule.onNodeWithTag("workspace-editor-back").performClick()
         }
 
+        // Make the oldest retained tab dirty immediately before opening the 26th file.
         composeRule.onNodeWithTag("workspace-file-list")
-            .performScrollToNode(hasTestTag("workspace-entry-tab-5.txt"))
-        composeRule.onNodeWithTag("workspace-entry-tab-5.txt").performClick()
-        // The key behavior is that the fifth file was not opened; it remains available after a tab closes.
-        assertTrue(
-            "The fifth file must not replace an open editor tab.",
-            runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertIsDisplayed() }.isFailure,
-        )
-
-        composeRule.onNodeWithTag("workspace-file-list").performScrollToNode(hasTestTag("workspace-entry-tab-1.txt"))
+            .performScrollToNode(hasTestTag("workspace-entry-tab-1.txt"))
         composeRule.onNodeWithTag("workspace-entry-tab-1.txt").performClick()
-        composeRule.onNodeWithTag("workspace-tab-close-tab-1.txt").performClick()
-        composeRule.onNodeWithTag("workspace-editor-back").performClick()
-        composeRule.onNodeWithTag("workspace-file-list").performScrollToNode(hasTestTag("workspace-entry-tab-5.txt"))
-        composeRule.onNodeWithTag("workspace-entry-tab-5.txt").performClick()
-        waitForUiStage("fifth file opens after a tab is closed") {
-            runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("tab content 5") }.isSuccess
+        waitForUiStage("oldest tab reactivated") {
+            runCatching {
+                composeRule.onNodeWithTag("workspace-editor-input")
+                    .assertTextContains("tab content 1", substring = true)
+            }.isSuccess
         }
-        assertEquals(5, (1..5).count { File(workspaceRoot, "tab-$it.txt").isFile })
+        composeRule.onNodeWithTag("workspace-editor-input").performTextReplacement("tab 1 autosaved draft")
+        composeRule.onNodeWithTag("workspace-editor-back").performClick()
+
+        composeRule.onNodeWithTag("workspace-file-list")
+            .performScrollToNode(hasTestTag("workspace-entry-tab-26.txt"))
+        composeRule.onNodeWithTag("workspace-entry-tab-26.txt").performClick()
+        waitForUiStage("26th tab opened after oldest-tab save and eviction", timeoutMillis = 10_000) {
+            runCatching {
+                composeRule.onNodeWithTag("workspace-editor-input")
+                    .assertTextContains("tab content 26", substring = true)
+            }.isSuccess
+        }
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            File(workspaceRoot, "tab-1.txt").readText() == "tab 1 autosaved draft"
+        }
+        assertEquals("tab 1 autosaved draft", File(workspaceRoot, "tab-1.txt").readText())
+    }
+
+    @Test
+    fun workspaceEditorAutoSavesDraftWithoutPressingSave() {
+        val file = File(workspaceRoot, "autosave-sample.txt")
+        file.writeText("before")
+        composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
+        waitForUiStage("workspace file list for autosave") {
+            runCatching { composeRule.onNodeWithTag("workspace-file-list").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-file-list")
+            .performScrollToNode(hasTestTag("workspace-entry-autosave-sample.txt"))
+        composeRule.onNodeWithTag("workspace-entry-autosave-sample.txt").performClick()
+        waitForUiStage("autosave file loaded") {
+            runCatching {
+                composeRule.onNodeWithTag("workspace-editor-input")
+                    .assertTextContains("before", substring = true)
+            }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-editor-input").performTextReplacement("saved by autosave")
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { file.readText() == "saved by autosave" }.getOrDefault(false)
+        }
+        assertEquals("saved by autosave", file.readText())
     }
 
     private fun waitForUiStage(stage: String, timeoutMillis: Long = 5_000, condition: () -> Boolean) {

@@ -1,6 +1,7 @@
 package com.astracode.check
 
 import android.graphics.BitmapFactory
+import android.os.SystemClock
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.combinedClickable
@@ -47,7 +48,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
@@ -56,8 +59,16 @@ import java.nio.file.LinkOption
 import java.nio.file.StandardCopyOption
 
 private const val MAX_WORKSPACE_TEXT_BYTES = 8L * 1024L * 1024L
-private const val MAX_OPEN_EDITOR_TABS = 4
-private const val MAX_OPEN_EDITOR_BUFFER_CHARS = 8 * 1024 * 1024
+private const val MAX_OPEN_EDITOR_TABS = 25
+// This budget counts both each tab draft and its saved snapshot (UTF-16 code units).
+private const val MAX_OPEN_EDITOR_BUFFER_CHARS = 16L * 1024L * 1024L
+private const val EDITOR_AUTOSAVE_DEBOUNCE_MS = 300L
+private const val EDITOR_AUTOSAVE_MAX_WAIT_MS = 15_000L
+
+private data class WorkspaceEditorSaveOutcome(
+    val linkedSyncSucceeded: Boolean,
+    val linkedSyncError: String? = null,
+)
 
 private data class WorkspaceEditorTab(
     val path: String,
@@ -87,6 +98,9 @@ internal fun WorkspaceBrowserPanel(
     var refreshKey by remember(root) { mutableStateOf(0) }
     var openedFile by remember(root) { mutableStateOf<String?>(null) }
     var editorTabs by remember(root) { mutableStateOf(emptyList<WorkspaceEditorTab>()) }
+    var firstDirtyAt by remember(root) { mutableStateOf(emptyMap<String, Long>()) }
+    var lastEditedAt by remember(root) { mutableStateOf(emptyMap<String, Long>()) }
+    var replacingOldestTab by remember(root) { mutableStateOf(false) }
     var pendingCloseTabPath by remember(root) { mutableStateOf<String?>(null) }
     var showDiscardTabDialog by remember(root) { mutableStateOf(false) }
     var showDiscardWorkspaceDialog by remember(root) { mutableStateOf(false) }
@@ -139,36 +153,162 @@ internal fun WorkspaceBrowserPanel(
     val savedText = activeEditorTab?.savedText.orEmpty()
     val loading = activeEditorTab?.isLoading ?: false
 
-    fun updateEditorText(newText: String) {
-        val path = openedFile ?: return
-        val otherBufferChars = editorTabs.filterNot { it.path == path }.sumOf { it.text.length }
-        if (otherBufferChars.toLong() + newText.length > MAX_OPEN_EDITOR_BUFFER_CHARS.toLong()) {
-            message = "Editor memory limit reached. Save and close another tab before adding more text."
+    val saveMutex = remember(root) { Mutex() }
+
+    fun clearEditorAutosaveSchedule(path: String) {
+        firstDirtyAt = firstDirtyAt - path
+        lastEditedAt = lastEditedAt - path
+    }
+
+    fun replaceOldestTabAndOpen(oldestPath: String, newPath: String) {
+        if (editorTabs.none { it.path == oldestPath }) {
+            replacingOldestTab = false
+            message = "Could not replace the oldest editor tab. Try opening the file again."
             return
         }
+        editorTabs = editorTabs.filterNot { it.path == oldestPath } +
+            WorkspaceEditorTab(path = newPath, isLoading = true)
+        clearEditorAutosaveSchedule(oldestPath)
+        currentDirectory = newPath.substringBeforeLast('/', "")
+        openedFile = newPath
+        pendingCloseTabPath = null
+        showDiscardTabDialog = false
+        replacingOldestTab = false
+    }
+
+    suspend fun saveWorkspaceEditorTab(
+        path: String,
+        contentToSave: String,
+    ): Result<WorkspaceEditorSaveOutcome> {
+        saveMutex.lock()
+        try {
+            val beforeSave = editorTabs.firstOrNull { it.path == path }
+                ?: return Result.failure(IOException("This editor tab is no longer open."))
+            if (beforeSave.text == contentToSave && beforeSave.savedText == contentToSave) {
+                return Result.success(WorkspaceEditorSaveOutcome(linkedSyncSucceeded = true))
+            }
+
+            val syncResult = try {
+                withContext(Dispatchers.IO) {
+                    writeWorkspaceText(root, path, contentToSave)
+                    runCatching {
+                        syncLinkedWorkspacePaths(root, externalRoot, syncedPaths, path)
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                return Result.failure(error)
+            }
+
+            val stillOpen = editorTabs.firstOrNull { it.path == path }
+            if (stillOpen != null) {
+                editorTabs = editorTabs.map { tab ->
+                    if (tab.path == path) tab.copy(savedText = contentToSave) else tab
+                }
+                val latestText = editorTabs.firstOrNull { it.path == path }?.text
+                if (latestText == contentToSave) {
+                    clearEditorAutosaveSchedule(path)
+                } else {
+                    // Edits made while the disk write was running start a fresh bounded save window.
+                    val now = SystemClock.elapsedRealtime()
+                    firstDirtyAt = firstDirtyAt + (path to now)
+                    lastEditedAt = lastEditedAt + (path to now)
+                }
+            }
+
+            Result.success(
+                WorkspaceEditorSaveOutcome(
+                    linkedSyncSucceeded = syncResult.isSuccess,
+                    linkedSyncError = syncResult.exceptionOrNull()?.message,
+                ),
+            )
+        } finally {
+            saveMutex.unlock()
+        }
+    }
+
+    fun updateEditorText(newText: String) {
+        if (replacingOldestTab) return
+        val path = openedFile ?: return
+        val currentTab = editorTabs.firstOrNull { it.path == path } ?: return
+        if (newText == currentTab.text) return
+
+        val otherBufferUnits = editorTabs.asSequence()
+            .filterNot { it.path == path }
+            .sumOf { it.text.length.toLong() + it.savedText.length.toLong() }
+        if (otherBufferUnits + newText.length.toLong() + currentTab.savedText.length.toLong() >
+            MAX_OPEN_EDITOR_BUFFER_CHARS
+        ) {
+            message = "Editor memory limit reached. Save or close another tab before adding more text."
+            return
+        }
+
+        val now = SystemClock.elapsedRealtime()
+        if (currentTab.text == currentTab.savedText) {
+            firstDirtyAt = firstDirtyAt + (path to now)
+        }
+        lastEditedAt = lastEditedAt + (path to now)
         editorTabs = editorTabs.map { tab ->
             if (tab.path == path) tab.copy(text = newText) else tab
         }
     }
 
     fun activateEditorFile(path: String) {
+        if (replacingOldestTab) return
         val existing = editorTabs.firstOrNull { it.path == path }
         if (existing != null) {
             currentDirectory = path.substringBeforeLast('/', "")
             openedFile = path
             return
         }
-        if (editorTabs.size >= MAX_OPEN_EDITOR_TABS) {
-            message = "You can keep up to $MAX_OPEN_EDITOR_TABS files open. Close a tab before opening another."
-            return
-        }
+
         val estimatedBytes = runCatching {
             Files.size(resolveWorkspacePath(root, path).toPath())
-        }.getOrDefault(MAX_OPEN_EDITOR_BUFFER_CHARS.toLong() + 1L)
-        val currentBufferChars = editorTabs.sumOf { it.text.length }
-        if (editorTabs.isNotEmpty() &&
-            currentBufferChars.toLong() + estimatedBytes > MAX_OPEN_EDITOR_BUFFER_CHARS.toLong()
-        ) {
+        }.getOrDefault(MAX_WORKSPACE_TEXT_BYTES + 1L)
+        if (estimatedBytes > MAX_WORKSPACE_TEXT_BYTES) {
+            message = "Files larger than 8 MiB cannot be opened in the editor yet."
+            return
+        }
+
+        if (editorTabs.size >= MAX_OPEN_EDITOR_TABS) {
+            val oldest = editorTabs.first()
+            val remainingBufferUnits = editorTabs.drop(1)
+                .sumOf { it.text.length.toLong() + it.savedText.length.toLong() }
+            if (remainingBufferUnits + estimatedBytes * 2L > MAX_OPEN_EDITOR_BUFFER_CHARS) {
+                message = "The editor memory limit would be exceeded even after closing the oldest tab."
+                return
+            }
+            if (oldest.text == oldest.savedText) {
+                // A clean or not-yet-loaded tab already matches disk; no extra write is needed.
+                replaceOldestTabAndOpen(oldest.path, path)
+                return
+            }
+
+            replacingOldestTab = true
+            scope.launch {
+                val result = saveWorkspaceEditorTab(oldest.path, oldest.text)
+                result.onSuccess { outcome ->
+                    replaceOldestTabAndOpen(oldest.path, path)
+                    message = if (outcome.linkedSyncSucceeded) {
+                        "Saved and closed the oldest tab to open ${path.substringAfterLast('/')}."
+                    } else {
+                        "Saved locally, but linked sync failed: " +
+                            (outcome.linkedSyncError ?: "unknown sync error")
+                    }
+                }.onFailure { error ->
+                    replacingOldestTab = false
+                    message = "Could not auto-save the oldest tab; it was kept open. " +
+                        (error.message ?: "Unknown save error.")
+                }
+            }
+            return
+        }
+
+        val currentBufferUnits = editorTabs.sumOf {
+            it.text.length.toLong() + it.savedText.length.toLong()
+        }
+        if (currentBufferUnits + estimatedBytes * 2L > MAX_OPEN_EDITOR_BUFFER_CHARS) {
             message = "The open-file memory limit is reached. Save and close another tab before opening this file."
             return
         }
@@ -182,6 +322,7 @@ internal fun WorkspaceBrowserPanel(
         if (oldIndex < 0) return
         val remaining = editorTabs.filterNot { it.path == path }
         editorTabs = remaining
+        clearEditorAutosaveSchedule(path)
         if (openedFile == path) {
             val nextPath = remaining.getOrNull(oldIndex.coerceAtMost(remaining.lastIndex))?.path
             currentDirectory = nextPath?.substringBeforeLast('/', "") ?: currentDirectory
@@ -241,9 +382,11 @@ internal fun WorkspaceBrowserPanel(
         if (!tab.isLoading) return@LaunchedEffect
         try {
             val text = withContext(Dispatchers.IO) { readWorkspaceText(root, path) }
-            val otherBufferChars = editorTabs.filterNot { it.path == path }.sumOf { it.text.length }
+            val otherBufferChars = editorTabs.asSequence()
+                .filterNot { it.path == path }
+                .sumOf { it.text.length.toLong() + it.savedText.length.toLong() }
             if (editorTabs.size > 1 &&
-                otherBufferChars.toLong() + text.length > MAX_OPEN_EDITOR_BUFFER_CHARS.toLong()
+                otherBufferChars + text.length.toLong() * 2L > MAX_OPEN_EDITOR_BUFFER_CHARS
             ) {
                 throw IOException("Opening this file would exceed the editor memory limit. Close another tab first.")
             }
@@ -255,11 +398,53 @@ internal fun WorkspaceBrowserPanel(
             throw cancelled
         } catch (error: Exception) {
             editorTabs = editorTabs.filterNot { it.path == path }
+            clearEditorAutosaveSchedule(path)
             if (openedFile == path) openedFile = null
             message = error.message ?: "Could not open this file."
         }
     }
 
+
+
+
+    LaunchedEffect(root, editorTabs, firstDirtyAt, lastEditedAt, replacingOldestTab) {
+        if (replacingOldestTab) return@LaunchedEffect
+
+        val dirtyTabs = editorTabs.filter { !it.isLoading && it.text != it.savedText }
+        val dirtyPaths = dirtyTabs.map { it.path }.toSet()
+        val retainedFirstDirtyAt = firstDirtyAt.filterKeys { it in dirtyPaths }
+        val retainedLastEditedAt = lastEditedAt.filterKeys { it in dirtyPaths }
+        if (retainedFirstDirtyAt != firstDirtyAt) firstDirtyAt = retainedFirstDirtyAt
+        if (retainedLastEditedAt != lastEditedAt) lastEditedAt = retainedLastEditedAt
+        if (dirtyTabs.isEmpty()) return@LaunchedEffect
+
+        val now = SystemClock.elapsedRealtime()
+        val nextSave = dirtyTabs.map { tab ->
+            val firstEdit = firstDirtyAt[tab.path] ?: now
+            val lastEdit = lastEditedAt[tab.path] ?: firstEdit
+            val dueAt = minOf(
+                lastEdit + EDITOR_AUTOSAVE_DEBOUNCE_MS,
+                firstEdit + EDITOR_AUTOSAVE_MAX_WAIT_MS,
+            )
+            tab.path to dueAt
+        }.minByOrNull { it.second } ?: return@LaunchedEffect
+
+        delay((nextSave.second - now).coerceAtLeast(0L))
+        val tabToSave = editorTabs.firstOrNull { it.path == nextSave.first }
+        if (tabToSave != null && !tabToSave.isLoading && tabToSave.text != tabToSave.savedText) {
+            saveWorkspaceEditorTab(tabToSave.path, tabToSave.text)
+                .onSuccess { outcome ->
+                    if (!outcome.linkedSyncSucceeded) {
+                        message = "Autosaved locally, but linked sync failed: " +
+                            (outcome.linkedSyncError ?: "unknown sync error")
+                    }
+                }
+                .onFailure { error ->
+                    message = "Autosave failed for ${tabToSave.path.substringAfterLast('/')} : " +
+                        (error.message ?: "Unknown save error.")
+                }
+        }
+    }
 
     LaunchedEffect(root, archivePath, archiveDirectory, refreshKey) {
         val selectedArchive = archivePath
@@ -450,30 +635,22 @@ internal fun WorkspaceBrowserPanel(
                             val path = openedFile ?: return@Button
                             val contentToSave = editorText
                             scope.launch {
-                                runCatching {
-                                    withContext(Dispatchers.IO) {
-                                        writeWorkspaceText(root, path, contentToSave)
-                                        runCatching {
-                                            syncLinkedWorkspacePaths(root, externalRoot, syncedPaths, path)
+                                saveWorkspaceEditorTab(path, contentToSave)
+                                    .onSuccess { outcome ->
+                                        refreshKey++
+                                        message = if (outcome.linkedSyncSucceeded) {
+                                            "Saved " + path.substringAfterLast('/')
+                                        } else {
+                                            "Saved locally, but the linked copy could not be updated: " +
+                                                (outcome.linkedSyncError ?: "sync error")
                                         }
                                     }
-                                }.onSuccess { syncResult ->
-                                    editorTabs = editorTabs.map { tab ->
-                                        if (tab.path == path) tab.copy(savedText = contentToSave) else tab
+                                    .onFailure { error ->
+                                        message = error.message ?: "Could not save this file."
                                     }
-                                    refreshKey++
-                                    message = if (syncResult.isSuccess) {
-                                        "Saved " + path.substringAfterLast('/')
-                                    } else {
-                                        "Saved locally, but the linked copy could not be updated: " +
-                                            (syncResult.exceptionOrNull()?.message ?: "sync error")
-                                    }
-                                }.onFailure { error ->
-                                    message = error.message ?: "Could not save this file."
-                                }
                             }
                         },
-                        enabled = !loading && editorText != savedText,
+                        enabled = !loading && editorText != savedText && !replacingOldestTab,
                         modifier = Modifier.testTag("workspace-save-file"),
                     ) { Text("Save") }
                     TextButton(onClick = { openedFile = null }) { Text("Back to Files") }
