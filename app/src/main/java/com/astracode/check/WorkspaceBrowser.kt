@@ -5,6 +5,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -44,6 +45,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -54,6 +56,15 @@ import java.nio.file.LinkOption
 import java.nio.file.StandardCopyOption
 
 private const val MAX_WORKSPACE_TEXT_BYTES = 8L * 1024L * 1024L
+private const val MAX_OPEN_EDITOR_TABS = 4
+private const val MAX_OPEN_EDITOR_BUFFER_CHARS = 8 * 1024 * 1024
+
+private data class WorkspaceEditorTab(
+    val path: String,
+    val text: String = "",
+    val savedText: String = "",
+    val isLoading: Boolean = true,
+)
 
 private data class WorkspaceEntry(
     val path: String,
@@ -75,9 +86,10 @@ internal fun WorkspaceBrowserPanel(
     var folderCounts by remember(root) { mutableStateOf(emptyMap<String, Int>()) }
     var refreshKey by remember(root) { mutableStateOf(0) }
     var openedFile by remember(root) { mutableStateOf<String?>(null) }
-    var editorText by remember(root) { mutableStateOf("") }
-    var savedText by remember(root) { mutableStateOf("") }
-    var loading by remember(root) { mutableStateOf(false) }
+    var editorTabs by remember(root) { mutableStateOf(emptyList<WorkspaceEditorTab>()) }
+    var pendingCloseTabPath by remember(root) { mutableStateOf<String?>(null) }
+    var showDiscardTabDialog by remember(root) { mutableStateOf(false) }
+    var showDiscardWorkspaceDialog by remember(root) { mutableStateOf(false) }
     var message by remember(root) { mutableStateOf("") }
     var recentTrashIds by remember(root) { mutableStateOf(emptyList<String>()) }
     var pendingRenamePreview by remember(root) { mutableStateOf<Map<String, String>?>(null) }
@@ -122,6 +134,76 @@ internal fun WorkspaceBrowserPanel(
     val externalRoot = remember(root) { File(root.parentFile, "external-workspace") }
     var syncedPaths by remember(root) { mutableStateOf(loadSyncedPaths(context, root)) }
     val scope = rememberCoroutineScope()
+    val activeEditorTab = editorTabs.firstOrNull { it.path == openedFile }
+    val editorText = activeEditorTab?.text.orEmpty()
+    val savedText = activeEditorTab?.savedText.orEmpty()
+    val loading = activeEditorTab?.isLoading ?: false
+
+    fun updateEditorText(newText: String) {
+        val path = openedFile ?: return
+        val otherBufferChars = editorTabs.filterNot { it.path == path }.sumOf { it.text.length }
+        if (otherBufferChars.toLong() + newText.length > MAX_OPEN_EDITOR_BUFFER_CHARS.toLong()) {
+            message = "Editor memory limit reached. Save and close another tab before adding more text."
+            return
+        }
+        editorTabs = editorTabs.map { tab ->
+            if (tab.path == path) tab.copy(text = newText) else tab
+        }
+    }
+
+    fun activateEditorFile(path: String) {
+        val existing = editorTabs.firstOrNull { it.path == path }
+        if (existing != null) {
+            openedFile = path
+            return
+        }
+        if (editorTabs.size >= MAX_OPEN_EDITOR_TABS) {
+            message = "You can keep up to $MAX_OPEN_EDITOR_TABS files open. Close a tab before opening another."
+            return
+        }
+        val estimatedBytes = runCatching {
+            Files.size(resolveWorkspacePath(root, path).toPath())
+        }.getOrDefault(MAX_OPEN_EDITOR_BUFFER_CHARS.toLong() + 1L)
+        val currentBufferChars = editorTabs.sumOf { it.text.length }
+        if (editorTabs.isNotEmpty() &&
+            currentBufferChars.toLong() + estimatedBytes > MAX_OPEN_EDITOR_BUFFER_CHARS.toLong()
+        ) {
+            message = "The open-file memory limit is reached. Save and close another tab before opening this file."
+            return
+        }
+        editorTabs = editorTabs + WorkspaceEditorTab(path = path, isLoading = true)
+        openedFile = path
+    }
+
+    fun removeEditorTab(path: String) {
+        val oldIndex = editorTabs.indexOfFirst { it.path == path }
+        if (oldIndex < 0) return
+        val remaining = editorTabs.filterNot { it.path == path }
+        editorTabs = remaining
+        if (openedFile == path) {
+            openedFile = remaining.getOrNull(oldIndex.coerceAtMost(remaining.lastIndex))?.path
+        }
+        pendingCloseTabPath = null
+        showDiscardTabDialog = false
+    }
+
+    fun requestCloseEditorTab(path: String) {
+        val tab = editorTabs.firstOrNull { it.path == path } ?: return
+        if (tab.text != tab.savedText) {
+            pendingCloseTabPath = path
+            showDiscardTabDialog = true
+        } else {
+            removeEditorTab(path)
+        }
+    }
+
+    fun requestCloseWorkspace() {
+        if (editorTabs.any { it.text != it.savedText }) {
+            showDiscardWorkspaceDialog = true
+        } else {
+            onClose()
+        }
+    }
 
     LaunchedEffect(root) {
         withContext(Dispatchers.IO) {
@@ -150,23 +232,27 @@ internal fun WorkspaceBrowserPanel(
     }
 
     LaunchedEffect(root, openedFile) {
-        val path = openedFile
-        if (path == null) {
-            editorText = ""
-            savedText = ""
-            loading = false
-            return@LaunchedEffect
-        }
-        loading = true
+        val path = openedFile ?: return@LaunchedEffect
+        val tab = editorTabs.firstOrNull { it.path == path } ?: return@LaunchedEffect
+        if (!tab.isLoading) return@LaunchedEffect
         try {
             val text = withContext(Dispatchers.IO) { readWorkspaceText(root, path) }
-            editorText = text
-            savedText = text
+            val otherBufferChars = editorTabs.filterNot { it.path == path }.sumOf { it.text.length }
+            if (editorTabs.size > 1 &&
+                otherBufferChars.toLong() + text.length > MAX_OPEN_EDITOR_BUFFER_CHARS.toLong()
+            ) {
+                throw IOException("Opening this file would exceed the editor memory limit. Close another tab first.")
+            }
+            editorTabs = editorTabs.map { current ->
+                if (current.path == path) current.copy(text = text, savedText = text, isLoading = false)
+                else current
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (error: Exception) {
+            editorTabs = editorTabs.filterNot { it.path == path }
+            if (openedFile == path) openedFile = null
             message = error.message ?: "Could not open this file."
-            openedFile = null
-        } finally {
-            loading = false
         }
     }
 
@@ -270,7 +356,10 @@ internal fun WorkspaceBrowserPanel(
                     modifier = Modifier.testTag("workspace-safety-tools"),
                 ) { Text("File safety") }
             }
-            TextButton(onClick = onClose, modifier = Modifier.testTag("close-workspace-browser")) { Text("Close") }
+            TextButton(onClick = ::requestCloseWorkspace, modifier = Modifier.testTag("close-workspace-browser")) { Text("Close") }
+        }
+        if (openedFile == null && message.isNotBlank()) {
+            Text(message, modifier = Modifier.fillMaxWidth().testTag("workspace-browser-message"))
         }
         if (selectionMode && openedFile == null && openedArchiveEntry == null && archivePath == null) {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -320,12 +409,34 @@ internal fun WorkspaceBrowserPanel(
                 }
                 Text(openedFile!!.substringAfterLast('/'), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                editorTabs.forEach { tab ->
+                    val tagSuffix = tab.path.replace("/", "__")
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(
+                            onClick = { openedFile = tab.path },
+                            modifier = Modifier.testTag("workspace-tab-$tagSuffix"),
+                        ) {
+                            val dirtyMarker = if (tab.text != tab.savedText) " •" else ""
+                            Text(tab.path.substringAfterLast('/') + dirtyMarker, maxLines = 1)
+                        }
+                        TextButton(
+                            onClick = { requestCloseEditorTab(tab.path) },
+                            modifier = Modifier.testTag("workspace-tab-close-$tagSuffix"),
+                        ) { Text("×") }
+                    }
+                }
+            }
             if (loading) {
                 Text("Opening file…", modifier = Modifier.testTag("workspace-editor-loading"))
             } else {
                 OutlinedTextField(
                     value = editorText,
-                    onValueChange = { editorText = it },
+                    onValueChange = ::updateEditorText,
                     modifier = Modifier.fillMaxWidth().weight(1f).testTag("workspace-editor-input"),
                     label = { Text("File contents") },
                 )
@@ -333,10 +444,13 @@ internal fun WorkspaceBrowserPanel(
                     Button(
                         onClick = {
                             val path = openedFile ?: return@Button
+                            val contentToSave = editorText
                             scope.launch {
-                                runCatching { withContext(Dispatchers.IO) { writeWorkspaceText(root, path, editorText) } }
+                                runCatching { withContext(Dispatchers.IO) { writeWorkspaceText(root, path, contentToSave) } }
                                     .onSuccess {
-                                        savedText = editorText
+                                        editorTabs = editorTabs.map { tab ->
+                                            if (tab.path == path) tab.copy(savedText = contentToSave) else tab
+                                        }
                                         syncLinkedWorkspacePaths(root, externalRoot, syncedPaths, path)
                                         refreshKey++
                                         message = "Saved " + path.substringAfterLast('/')
@@ -347,7 +461,7 @@ internal fun WorkspaceBrowserPanel(
                         enabled = !loading && editorText != savedText,
                         modifier = Modifier.testTag("workspace-save-file"),
                     ) { Text("Save") }
-                    TextButton(onClick = { openedFile = null }) { Text("Close file") }
+                    TextButton(onClick = { openedFile = null }) { Text("Back to Files") }
                 }
             }
 
@@ -714,7 +828,7 @@ internal fun WorkspaceBrowserPanel(
                                         operationEntry = entry
                                         operationKind = "extract"
                                         operationInput = entry.path.replace(Regex("(?i)\\.zip$"), "")
-                                    } else openedFile = entry.path
+                                    } else activateEditorFile(entry.path)
                                 },
                                 onLongClick = {
                                     if (selectionMode) {
@@ -1370,9 +1484,7 @@ internal fun WorkspaceBrowserPanel(
                                 result.onSuccess { path ->
                                     showCreateFileDialog = false
                                     createFileName = ""
-                                    openedFile = path
-                                    editorText = ""
-                                    savedText = ""
+                                    activateEditorFile(path)
                                     refreshKey++
                                     message = "Created $normalizedName"
                                 }.onFailure { error ->
@@ -1386,6 +1498,65 @@ internal fun WorkspaceBrowserPanel(
             },
             dismissButton = {
                 TextButton(onClick = { showCreateFileDialog = false }) { Text("Cancel") }
+            },
+        )
+    }
+
+    if (showDiscardTabDialog) {
+        val pathToClose = pendingCloseTabPath
+        AlertDialog(
+            onDismissRequest = {
+                showDiscardTabDialog = false
+                pendingCloseTabPath = null
+            },
+            title = { Text("Discard unsaved changes?") },
+            text = {
+                Text("Close " + (pathToClose?.substringAfterLast('/') ?: "this file") + " and discard its unsaved edits?")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val path = pendingCloseTabPath
+                        if (path != null) removeEditorTab(path)
+                        else {
+                            showDiscardTabDialog = false
+                            pendingCloseTabPath = null
+                        }
+                    },
+                    modifier = Modifier.testTag("workspace-tab-discard-confirm"),
+                ) { Text("Discard changes") }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showDiscardTabDialog = false
+                        pendingCloseTabPath = null
+                    },
+                    modifier = Modifier.testTag("workspace-tab-discard-cancel"),
+                ) { Text("Keep editing") }
+            },
+        )
+    }
+
+    if (showDiscardWorkspaceDialog) {
+        AlertDialog(
+            onDismissRequest = { showDiscardWorkspaceDialog = false },
+            title = { Text("Discard unsaved changes?") },
+            text = { Text("One or more open files have unsaved edits. Close the workspace and discard those edits?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDiscardWorkspaceDialog = false
+                        onClose()
+                    },
+                    modifier = Modifier.testTag("workspace-discard-all-confirm"),
+                ) { Text("Discard changes and close") }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showDiscardWorkspaceDialog = false },
+                    modifier = Modifier.testTag("workspace-discard-all-cancel"),
+                ) { Text("Keep editing") }
             },
         )
     }
