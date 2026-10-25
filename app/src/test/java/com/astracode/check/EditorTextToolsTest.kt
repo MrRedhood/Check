@@ -98,4 +98,44 @@ class EditorTextToolsTest {
         assertFalse(replaced)
         assertEquals(value.text, result.text)
     }
+    @Test
+    fun syntaxHighlighterRecognizesMoreThan150LanguageNamesAndCommonTypes() {
+        assertTrue(supportedSyntaxLanguageCount() >= 150)
+        assertEquals("Kotlin", detectSyntaxLanguage("src/Main.kt")?.name)
+        assertEquals("Python", detectSyntaxLanguage("script.py")?.name)
+        assertEquals("HTML", detectSyntaxLanguage("view.html")?.name)
+        assertEquals("SQL", detectSyntaxLanguage("query.sql")?.name)
+
+        val source = "fun greet(name: String) {\\n  // note\\n  println(\"hello\")\\n  val n = 42\\n}"
+        val spans = findSyntaxHighlightSpans(source, "Main.kt")
+        assertTrue(spans.any { source.substring(it.start, it.end) == "fun" && it.style.color == SyntaxPalette.Keyword })
+        assertTrue(spans.any { source.substring(it.start, it.end) == "String" && it.style.color == SyntaxPalette.Type })
+        assertTrue(spans.any { source.substring(it.start, it.end) == "// note" && it.style.color == SyntaxPalette.Comment })
+        assertTrue(spans.any { source.substring(it.start, it.end) == "\\\"hello\\\"" && it.style.color == SyntaxPalette.String })
+        assertTrue(spans.any { source.substring(it.start, it.end) == "42" && it.style.color == SyntaxPalette.Number })
+    }
+
+    @Test
+    fun syntaxHighlightingPreservesEditorTextAndComposesWithLineNumbers() {
+        val source = "fun answer() = 42\\n"
+        val transformed = codeFoldingVisualTransformation(emptyList(), emptySet(), "Answer.kt")
+            .filter(AnnotatedString(source))
+
+        assertEquals("1 │ fun answer() = 42\\n2 │ ", transformed.text.text)
+        val keywordStart = transformed.text.text.indexOf("fun")
+        assertTrue(transformed.text.spanStyles.any {
+            it.start == keywordStart && it.end == keywordStart + 3 &&
+                it.item.color == SyntaxPalette.Keyword
+        })
+        for (offset in 0..source.length) {
+            assertTrue(transformed.offsetMapping.originalToTransformed(offset) in 0..transformed.text.length)
+        }
+    }
+
+    @Test
+    fun unknownAndOversizedFilesSkipHighlightingSafely() {
+        assertTrue(findSyntaxHighlightSpans("val x = 1", "notes.unknownext").isEmpty())
+        assertTrue(findSyntaxHighlightSpans("x".repeat(512 * 1024 + 1), "main.kt").isEmpty())
+    }
+
 }

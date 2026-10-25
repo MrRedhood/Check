@@ -178,8 +178,8 @@ internal fun WorkspaceBrowserPanel(
     var findQuery by remember(openedFile) { mutableStateOf("") }
     var replacementText by remember(openedFile) { mutableStateOf("") }
     val editorFocusRequester = remember { FocusRequester() }
-    val lineNumberTransformation = remember(foldableRegions, collapsedFoldStarts) {
-        codeFoldingVisualTransformation(foldableRegions, collapsedFoldStarts)
+    val lineNumberTransformation = remember(foldableRegions, collapsedFoldStarts, openedFile) {
+        codeFoldingVisualTransformation(foldableRegions, collapsedFoldStarts, openedFile)
     }
 
     LaunchedEffect(openedFile, editorText) {

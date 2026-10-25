@@ -96,6 +96,7 @@ internal fun lineNumberVisualTransformation(): VisualTransformation =
 internal fun codeFoldingVisualTransformation(
     foldableRegions: List<CodeFoldRegion>,
     collapsedLineStarts: Set<Int>,
+    sourcePath: String? = null,
 ): VisualTransformation = VisualTransformation { input ->
     val text = input.text
     val starts = mutableListOf(0)
@@ -109,7 +110,43 @@ internal fun codeFoldingVisualTransformation(
     }.associate { it.startLine to it.endLine }
 
     val offsets = IntArray(text.length + 1)
-    val output = StringBuilder(text.length + lineCount * (digitWidth + 3))
+    val syntaxSpans = sourcePath?.let { findSyntaxHighlightSpans(text, it) }.orEmpty()
+    val output = AnnotatedString.Builder()
+    var syntaxSpanIndex = 0
+    fun appendStyledSource(start: Int, end: Int) {
+        var offset = start
+        while (offset < end) {
+            while (syntaxSpanIndex < syntaxSpans.size && syntaxSpans[syntaxSpanIndex].end <= offset) {
+                syntaxSpanIndex++
+            }
+            val span = syntaxSpans.getOrNull(syntaxSpanIndex)
+            val plainEnd = if (span == null || span.start >= end) end
+                else if (span.start > offset) minOf(end, span.start) else offset
+            if (plainEnd > offset) {
+                val base = output.length
+                for (sourceOffset in offset until plainEnd) offsets[sourceOffset] = base + sourceOffset - offset
+                output.append(text.substring(offset, plainEnd))
+                offsets[plainEnd] = output.length
+                offset = plainEnd
+            } else if (span != null && span.start <= offset && span.end > offset) {
+                val styledEnd = minOf(end, span.end)
+                val base = output.length
+                for (sourceOffset in offset until styledEnd) offsets[sourceOffset] = base + sourceOffset - offset
+                output.pushStyle(span.style)
+                output.append(text.substring(offset, styledEnd))
+                output.pop()
+                offsets[styledEnd] = output.length
+                offset = styledEnd
+                if (styledEnd >= span.end) syntaxSpanIndex++
+            } else {
+                val base = output.length
+                offsets[offset] = base
+                output.append(text[offset].toString())
+                offset++
+                offsets[offset] = output.length
+            }
+        }
+    }
     var hiddenThrough = 0
     for (lineIndex in starts.indices) {
         val line = lineIndex + 1
@@ -122,11 +159,7 @@ internal fun codeFoldingVisualTransformation(
             continue
         }
         output.append(line.toString().padStart(digitWidth)).append(" │ ")
-        offsets[start] = output.length
-        for (offset in start until end) {
-            offsets[offset] = output.length
-            output.append(text[offset])
-        }
+        appendStyledSource(start, end)
         val foldEnd = collapsedEnds[line]
         if (foldEnd != null && foldEnd > line) {
             output.append(" … ").append(foldEnd - line).append(" lines folded …")
@@ -136,8 +169,8 @@ internal fun codeFoldingVisualTransformation(
         if (hasNewline) output.append('\n')
     }
     offsets[text.length] = output.length
-    val transformed = output.toString()
-    TransformedText(AnnotatedString(transformed), object : OffsetMapping {
+    val transformed = output.toAnnotatedString()
+    TransformedText(transformed, object : OffsetMapping {
         override fun originalToTransformed(offset: Int): Int =
             offsets[offset.coerceIn(0, text.length)]
         override fun transformedToOriginal(offset: Int): Int {
