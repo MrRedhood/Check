@@ -98,6 +98,7 @@ class EditorTextToolsTest {
         assertFalse(replaced)
         assertEquals(value.text, result.text)
     }
+
     @Test
     fun syntaxHighlighterRecognizesMoreThan150LanguageNamesAndCommonTypes() {
         assertTrue(supportedSyntaxLanguageCount() >= 150)
@@ -106,22 +107,22 @@ class EditorTextToolsTest {
         assertEquals("HTML", detectSyntaxLanguage("view.html")?.name)
         assertEquals("SQL", detectSyntaxLanguage("query.sql")?.name)
 
-        val source = "fun greet(name: String) {\\n  // note\\n  println(\"hello\")\\n  val n = 42\\n}"
+        val source = "fun greet(name: String) {\n  // note\n  println(\"hello\")\n  val n = 42\n}"
         val spans = findSyntaxHighlightSpans(source, "Main.kt")
         assertTrue(spans.any { source.substring(it.start, it.end) == "fun" && it.style.color == SyntaxPalette.Keyword })
         assertTrue(spans.any { source.substring(it.start, it.end) == "String" && it.style.color == SyntaxPalette.Type })
         assertTrue(spans.any { source.substring(it.start, it.end) == "// note" && it.style.color == SyntaxPalette.Comment })
-        assertTrue(spans.any { source.substring(it.start, it.end) == "\\\"hello\\\"" && it.style.color == SyntaxPalette.String })
+        assertTrue(spans.any { source.substring(it.start, it.end) == "\"hello\"" && it.style.color == SyntaxPalette.String })
         assertTrue(spans.any { source.substring(it.start, it.end) == "42" && it.style.color == SyntaxPalette.Number })
     }
 
     @Test
     fun syntaxHighlightingPreservesEditorTextAndComposesWithLineNumbers() {
-        val source = "fun answer() = 42\\n"
+        val source = "fun answer() = 42\n"
         val transformed = codeFoldingVisualTransformation(emptyList(), emptySet(), "Answer.kt")
             .filter(AnnotatedString(source))
 
-        assertEquals("1 │ fun answer() = 42\\n2 │ ", transformed.text.text)
+        assertEquals("1 │ fun answer() = 42\n2 │ ", transformed.text.text)
         val keywordStart = transformed.text.text.indexOf("fun")
         assertTrue(transformed.text.spanStyles.any {
             it.start == keywordStart && it.end == keywordStart + 3 &&
