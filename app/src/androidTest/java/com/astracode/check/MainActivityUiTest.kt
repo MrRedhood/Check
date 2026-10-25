@@ -523,6 +523,33 @@ class MainActivityUiTest {
     }
 
     @Test
+    fun renameSavesDirtyEditorDraftBeforeMovingTheFile() {
+        composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
+        waitForUiStage("README row before rename") {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-README.txt").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-entry-README.txt").performClick()
+        waitForUiStage("README editor before rename") {
+            runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-editor-input").performTextReplacement("Unsaved text that must follow the rename")
+        composeRule.onNodeWithTag("workspace-editor-back").performClick()
+
+        composeRule.onNodeWithTag("workspace-entry-README.txt").performTouchInput { longClick() }
+        composeRule.onNodeWithTag("workspace-action-rename").performClick()
+        composeRule.onNodeWithTag("workspace-operation-input").performTextReplacement("README-renamed.txt")
+        composeRule.onNodeWithTag("confirm-workspace-operation").performClick()
+
+        val renamed = File(workspaceRoot, "README-renamed.txt")
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            renamed.isFile && runCatching { renamed.readText() == "Unsaved text that must follow the rename" }.getOrDefault(false)
+        }
+        assertEquals(false, File(workspaceRoot, "README.txt").exists())
+        composeRule.waitUntil(timeoutMillis = 1_000) { !File(workspaceRoot, "README.txt").exists() }
+        assertEquals("Unsaved text that must follow the rename", renamed.readText())
+    }
+
+    @Test
     fun dirtyEditorTabClosePromptDoesNotRaceAutosave() {
         composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
         waitForUiStage("README row") {
