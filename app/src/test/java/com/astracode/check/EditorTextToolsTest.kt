@@ -200,4 +200,49 @@ class EditorTextToolsTest {
     }
 
 
+
+    @Test
+    fun floatingToolsDuplicateMoveIndentAndCommentLinesSafely() {
+        val original = TextFieldValue("alpha\nbeta", selection = TextRange(2))
+        val duplicate = applyEditorTool(EditorToolAction.DUPLICATE_LINE, original, "Main.kt")
+        assertEquals("alpha\nalpha\nbeta", duplicate.value.text)
+
+        val moved = applyEditorTool(EditorToolAction.MOVE_LINE_DOWN, original, "Main.kt")
+        assertEquals("beta\nalpha", moved.value.text)
+
+        val indented = applyEditorTool(EditorToolAction.INDENT, original, "Main.kt")
+        assertEquals("    alpha\nbeta", indented.value.text)
+
+        val commented = applyEditorTool(
+            EditorToolAction.TOGGLE_COMMENT,
+            TextFieldValue("  val n = 1", selection = TextRange(8)),
+            "Main.kt",
+        )
+        assertEquals("  // val n = 1", commented.value.text)
+        val uncommented = applyEditorTool(EditorToolAction.TOGGLE_COMMENT, commented.value, "Main.kt")
+        assertEquals("  val n = 1", uncommented.value.text)
+    }
+
+    @Test
+    fun advancedAndAstraCodeToolsTransformTextAndBuildContextCapsules() {
+        val trimmed = applyEditorTool(
+            EditorToolAction.TRIM_TRAILING_WHITESPACE,
+            TextFieldValue("val answer = 42   \n"),
+            "Main.kt",
+        )
+        assertEquals("val answer = 42\n", trimmed.value.text)
+
+        val source = "before\nval answer = 42\nafter"
+        val selected = TextFieldValue(source, selection = TextRange(7, 22))
+        val capsule = applyEditorTool(EditorToolAction.CONTEXT_CAPSULE, selected, "src/Main.kt")
+        assertEquals(source, capsule.value.text)
+        assertTrue(capsule.clipboardText!!.contains("File: src/Main.kt"))
+        assertTrue(capsule.clipboardText.contains("<<< SELECTED CODE START >>>"))
+        assertTrue(capsule.clipboardText.contains("val answer = 42"))
+
+        val pulse = applyEditorTool(EditorToolAction.SELECTION_PULSE, selected, "src/Main.kt")
+        assertTrue(pulse.message.contains("15 chars"))
+        assertTrue(pulse.message.contains("3 words"))
+    }
+
 }

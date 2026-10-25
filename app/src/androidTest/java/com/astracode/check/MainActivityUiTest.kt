@@ -1,5 +1,7 @@
 package com.astracode.check
 
+import androidx.compose.ui.geometry.Offset
+
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -966,6 +968,40 @@ class MainActivityUiTest {
             sample.readText() == "val answer = 1\nval item = 2\n"
         }
         assertEquals("val answer = 1\nval item = 2\n", sample.readText())
+    }
+
+
+    @Test
+    fun floatingEditorToolsCanMoveAndApplyBasicAndAstraCodeActions() {
+        val sample = File(workspaceRoot, "FloatingTools.kt")
+        sample.writeText("val answer = 42")
+        composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
+        waitForUiStage("floating tools sample appears") {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-FloatingTools.kt").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-entry-FloatingTools.kt").performClick()
+        waitForUiStage("floating tools editor opens") {
+            runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertIsDisplayed() }.isSuccess
+        }
+
+        composeRule.onNodeWithTag("editor-tools-drag-handle").performTouchInput {
+            down(center)
+            moveBy(Offset(-120f, -120f))
+            up()
+        }
+        composeRule.onNodeWithTag("editor-tools-open").assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag("editor-tools-group-basic").assertIsDisplayed()
+        composeRule.onNodeWithTag("editor-tool-duplicate_line").performClick()
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            sample.readText() == "val answer = 42\nval answer = 42"
+        }
+        assertEquals("val answer = 42\nval answer = 42", sample.readText())
+
+        composeRule.onNodeWithTag("editor-tools-open").performClick()
+        composeRule.onNodeWithTag("editor-tools-group-astracode").performClick()
+        composeRule.onNodeWithTag("editor-tool-context_capsule").performClick()
+        composeRule.onNodeWithText("Copied AstraCode Context Capsule to clipboard.").assertIsDisplayed()
     }
 
 }

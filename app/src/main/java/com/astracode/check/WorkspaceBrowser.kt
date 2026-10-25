@@ -55,6 +55,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -180,6 +182,7 @@ internal fun WorkspaceBrowserPanel(
     var pathPickerCreateFolder by remember(root) { mutableStateOf(false) }
     var pathPickerFolderName by remember(root) { mutableStateOf("") }
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
     val externalRoot = remember(root) { File(root.parentFile, "external-workspace") }
     var syncedPaths by remember(root) { mutableStateOf(loadSyncedPaths(context, root)) }
     val scope = rememberCoroutineScope()
@@ -1065,6 +1068,7 @@ internal fun WorkspaceBrowserPanel(
                 Text("Opening file…", modifier = Modifier.testTag("workspace-editor-loading"))
             } else {
                 val editorInteractionSource = remember(openedFile) { MutableInteractionSource() }
+                Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 if (useVirtualizedEditor) {
                     VirtualizedCodeEditor(
                         value = editorFieldValue,
@@ -1092,7 +1096,7 @@ internal fun WorkspaceBrowserPanel(
                         lineNumberColor = MaterialTheme.colorScheme.onSurfaceVariant,
                         focusColor = MaterialTheme.colorScheme.primary,
                         borderColor = MaterialTheme.colorScheme.outline,
-                        modifier = Modifier.fillMaxWidth().weight(1f),
+                        modifier = Modifier.fillMaxSize(),
                         label = "File contents",
                         testTag = "workspace-editor-input",
                     )
@@ -1121,8 +1125,7 @@ internal fun WorkspaceBrowserPanel(
                         .onGloballyPositioned { coordinates ->
                             viewportTracker.updateViewportHeight(coordinates.size.height.toFloat())
                         }
-                        .fillMaxWidth()
-                        .weight(1f)
+                        .fillMaxSize()
                         .then(
                             if (wordWrapEnabled) Modifier
                             else Modifier.horizontalScroll(editorHorizontalScrollState),
@@ -1140,6 +1143,29 @@ internal fun WorkspaceBrowserPanel(
                             label = { Text("File contents") },
                             colors = OutlinedTextFieldDefaults.colors(),
                         )
+                    },
+                )
+                }
+
+                FloatingEditorTools(
+                    editorKey = openedFile.orEmpty(),
+                    modifier = Modifier.fillMaxSize(),
+                    onAction = { action ->
+                        val currentValue = editorFieldValue
+                        val outcome = applyEditorTool(action, currentValue, openedFile.orEmpty())
+                        outcome.clipboardText?.let { clipboardManager.setText(AnnotatedString(it)) }
+                        var accepted = true
+                        if (outcome.value.text != currentValue.text) {
+                            accepted = updateEditorText(outcome.value.text)
+                            if (accepted) {
+                                editorFieldValue = outcome.value
+                                selectedFindRange = null
+                            }
+                        } else {
+                            editorFieldValue = outcome.value
+                        }
+                        message = if (accepted) outcome.message else "The editor could not apply this change; the draft was left unchanged."
+                        runCatching { editorFocusRequester.requestFocus() }
                     },
                 )
                 }
