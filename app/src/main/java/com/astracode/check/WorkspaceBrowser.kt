@@ -485,6 +485,72 @@ internal fun WorkspaceBrowserPanel(
         }
     }
 
+    fun rewriteWorkspacePath(path: String, oldPath: String, newPath: String): String = when {
+        path == oldPath -> newPath
+        path.startsWith(oldPath + "/") -> newPath + path.removePrefix(oldPath)
+        else -> path
+    }
+
+    fun updateWorkspacePathReferences(oldPath: String, newPath: String) {
+        editorTabs = editorTabs.map { tab -> tab.copy(path = rewriteWorkspacePath(tab.path, oldPath, newPath)) }
+        openedFile = openedFile?.let { rewriteWorkspacePath(it, oldPath, newPath) }
+        currentDirectory = rewriteWorkspacePath(currentDirectory, oldPath, newPath)
+        selectedPaths = selectedPaths.mapTo(linkedSetOf()) { rewriteWorkspacePath(it, oldPath, newPath) }
+        firstDirtyAt = firstDirtyAt.entries.associate { rewriteWorkspacePath(it.key, oldPath, newPath) to it.value }
+        lastEditedAt = lastEditedAt.entries.associate { rewriteWorkspacePath(it.key, oldPath, newPath) to it.value }
+        autosaveRetryAt = autosaveRetryAt.entries.associate { rewriteWorkspacePath(it.key, oldPath, newPath) to it.value }
+    }
+
+    fun moveEntryToDirectory(entry: WorkspaceEntry, destinationDirectory: String) {
+        val sourcePath = entry.path
+        val destinationPath = joinWorkspacePath(destinationDirectory, entry.name)
+        if (sourcePath == destinationPath) {
+            message = "The item is already in that folder."
+            return
+        }
+        if (entry.isDirectory && destinationDirectory.startsWith(sourcePath + "/")) {
+            message = "A folder cannot be moved into itself."
+            return
+        }
+        scope.launch {
+            val tabsToSave = editorTabs.filter { it.path == sourcePath || (entry.isDirectory && it.path.startsWith(sourcePath + "/")) }
+                .filter { !it.isLoading && it.text != it.savedText }
+            var failedSave: String? = null
+            for (tab in tabsToSave) {
+                val saved = saveWorkspaceEditorTab(tab.path, tab.text)
+                if (saved.isFailure) {
+                    failedSave = saved.exceptionOrNull()?.message ?: "unknown save error"
+                    break
+                }
+            }
+            if (failedSave != null) {
+                message = "Save the open file before changing its path: " + failedSave
+                return@launch
+            }
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val source = resolveWorkspacePath(root, sourcePath)
+                    val destinationFolder = resolveWorkspacePath(root, destinationDirectory)
+                    if (!Files.exists(source.toPath(), LinkOption.NOFOLLOW_LINKS)) throw IOException("The item no longer exists.")
+                    if (!Files.isDirectory(destinationFolder.toPath(), LinkOption.NOFOLLOW_LINKS)) throw IOException("The destination is not a folder.")
+                    val destination = resolveWorkspacePath(root, destinationPath)
+                    if (destination.exists()) throw IOException("A file or folder with that name already exists in the destination.")
+                    if (entry.isDirectory && destination.path.startsWith(source.path + File.separator)) throw IOException("A folder cannot be moved into itself.")
+                    try { Files.move(source.toPath(), destination.toPath(), StandardCopyOption.ATOMIC_MOVE) }
+                    catch (_: java.nio.file.AtomicMoveNotSupportedException) { Files.move(source.toPath(), destination.toPath()) }
+                    updateSyncedPathsAfterMove(context, root, externalRoot, syncedPaths, sourcePath, destinationPath)
+                }
+            }.onSuccess { updatedLinks ->
+                syncedPaths = updatedLinks
+                updateWorkspacePathReferences(sourcePath, destinationPath)
+                pathPickerEntry = null
+                pathPickerCreateFolder = false
+                pathPickerFolderName = ""
+                refreshKey++
+                message = "Changed path: " + sourcePath + " → " + destinationPath
+            }.onFailure { error -> message = error.message ?: "Could not change the path." }
+        }
+    }
     LaunchedEffect(root) {
         withContext(Dispatchers.IO) {
             runCatching { WorkspaceRecovery.cleanupExpiredTrash(root) }
@@ -2037,6 +2103,59 @@ internal fun WorkspaceBrowserPanel(
             confirmButton = { TextButton(onClick = { actionEntry = null }) { Text("Cancel") } })
     }
 
+    pathPickerEntry?.let { entry ->
+        AlertDialog(
+            onDismissRequest = { pathPickerEntry = null; pathPickerCreateFolder = false; pathPickerFolderName = "" },
+            title = { Text(if (pathPickerCreateFolder) "Create destination folder" else "Change path for " + entry.name) },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (pathPickerCreateFolder) {
+                        Text("Create a folder in Workspace root. The selected item will be moved into it automatically.")
+                        OutlinedTextField(value = pathPickerFolderName, onValueChange = { pathPickerFolderName = it }, label = { Text("New folder name") }, singleLine = true, modifier = Modifier.fillMaxWidth().testTag("workspace-change-path-new-folder-name"))
+                    } else {
+                        Text("Choose a destination folder. Tapping it moves the item immediately.")
+                        if (pathPickerLoading) Text("Loading folders…") else {
+                            TextButton(onClick = { moveEntryToDirectory(entry, "") }, modifier = Modifier.fillMaxWidth().testTag("workspace-change-path-root")) { Text("Workspace root") }
+                            pathPickerDirectories.filter { it != entry.path && !it.startsWith(entry.path + "/") }.forEach { directory ->
+                                TextButton(onClick = { moveEntryToDirectory(entry, directory) }, modifier = Modifier.fillMaxWidth().testTag("workspace-change-path-" + directory.replace("/", "_"))) { Text(directory) }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                if (pathPickerCreateFolder) {
+                    TextButton(
+                        onClick = {
+                            val name = pathPickerFolderName.trim()
+                            if (!isSimpleWorkspaceName(name)) message = "Enter a valid folder name without path separators."
+                            else scope.launch {
+                                runCatching {
+                                    withContext(Dispatchers.IO) {
+                                        val folder = resolveWorkspacePath(root, name)
+                                        if (folder.exists()) throw IOException("A file or folder with that name already exists at the workspace root.")
+                                        if (!folder.mkdir()) throw IOException("Could not create the destination folder.")
+                                        syncLinkedWorkspacePaths(root, externalRoot, syncedPaths, name)
+                                        name
+                                    }
+                                }.onSuccess { destination ->
+                                    pathPickerDirectories = (pathPickerDirectories + destination).distinct().sorted()
+                                    pathPickerCreateFolder = false
+                                    pathPickerFolderName = ""
+                                    moveEntryToDirectory(entry, destination)
+                                }.onFailure { error -> message = error.message ?: "Could not create destination folder." }
+                            }
+                        },
+                        modifier = Modifier.testTag("workspace-change-path-create-folder"),
+                    ) { Text("Create folder and move") }
+                } else TextButton(onClick = { pathPickerEntry = null; pathPickerCreateFolder = false }, modifier = Modifier.testTag("workspace-change-path-close")) { Text("Close") }
+            },
+            dismissButton = {
+                if (pathPickerCreateFolder) TextButton(onClick = { pathPickerCreateFolder = false; pathPickerFolderName = "" }, modifier = Modifier.testTag("workspace-change-path-cancel-create-folder")) { Text("Back") }
+                else TextButton(onClick = { pathPickerCreateFolder = true; pathPickerFolderName = "" }, modifier = Modifier.testTag("workspace-change-path-new-folder")) { Text("Create new folder") }
+            },
+        )
+    }
     pendingDeleteEntry?.let { entry ->
         AlertDialog(onDismissRequest = { pendingDeleteEntry = null },
             title = { Text("Delete " + entry.name + "?") },
@@ -2679,6 +2798,19 @@ private fun listWorkspaceDirectory(root: File, relativePath: String): List<Works
     }.sortedWith(compareBy<WorkspaceEntry> { !it.isDirectory }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name })
 }
 
+private fun listWorkspaceDirectories(root: File): List<String> {
+    val canonicalRoot = root.canonicalFile.toPath()
+    if (!Files.isDirectory(canonicalRoot, LinkOption.NOFOLLOW_LINKS)) return emptyList()
+    return Files.walk(canonicalRoot).use { paths ->
+        paths.iterator().asSequence()
+            .filter { it != canonicalRoot }
+            .filter { Files.isDirectory(it, LinkOption.NOFOLLOW_LINKS) && !Files.isSymbolicLink(it) }
+            .map { canonicalRoot.relativize(it).joinToString("/") }
+            .filterNot { WorkspaceRecovery.isInternalPath(it) }
+            .sorted()
+            .toList()
+    }
+}
 private fun workspaceDirectoryItemCount(root: File, relativePath: String): Int = listWorkspaceDirectory(root, relativePath).size
 
 private fun readWorkspaceText(root: File, relativePath: String): String {
