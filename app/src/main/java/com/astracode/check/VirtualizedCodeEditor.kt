@@ -67,21 +67,32 @@ internal fun shouldUseVirtualizedEditor(sourceLength: Int): Boolean =
  */
 internal class VirtualLineIndex(initialText: String) {
     private var sourceText: String = initialText
-    private val starts = mutableListOf(0)
+    private var starts = IntArray(16)
+    private var startCount = 1
+    private val startsView: List<Int> = object : AbstractList<Int>() {
+        override val size: Int get() = startCount
+
+        override fun get(index: Int): Int {
+            if (index !in 0 until startCount) throw IndexOutOfBoundsException("Line index: $index")
+            return starts[index]
+        }
+    }
 
     init {
+        starts[0] = 0
         appendStarts(initialText, 0, initialText.length, includeFinalEmptyLine = true)
     }
 
-    val lineCount: Int get() = starts.size
-    fun lineStartsForSyntax(): List<Int> = starts
+    val lineCount: Int get() = startCount
 
-    fun lineStart(lineIndex: Int): Int = starts[lineIndex.coerceIn(0, starts.lastIndex)]
+    fun lineStartsForSyntax(): List<Int> = startsView
+
+    fun lineStart(lineIndex: Int): Int = starts[lineIndex.coerceIn(0, startCount - 1)]
 
     fun lineEnd(lineIndex: Int): Int {
-        val index = lineIndex.coerceIn(0, starts.lastIndex)
-        if (index == starts.lastIndex) return sourceText.length
-        var end = starts[index + 1] - 1 // newline position
+        val index = lineIndex.coerceIn(0, startCount - 1)
+        if (index == startCount - 1) return sourceText.length
+        var end = starts[index + 1] - 1
         if (end > starts[index] && sourceText[end - 1] == '\r') end--
         return end
     }
@@ -89,7 +100,7 @@ internal class VirtualLineIndex(initialText: String) {
     fun lineForOffset(offset: Int): Int {
         val target = offset.coerceIn(0, sourceText.length)
         var low = 0
-        var high = starts.lastIndex
+        var high = startCount - 1
         while (low <= high) {
             val middle = (low + high) ushr 1
             if (starts[middle] <= target) low = middle + 1 else high = middle - 1
@@ -140,7 +151,7 @@ internal class VirtualLineIndex(initialText: String) {
         val lineBeforeEdit = lineForOffset(start)
         val scanStart = starts[lineBeforeEdit]
         val firstReusableIndex = upperBound(oldEnd)
-        val reusableOldOffset = starts.getOrNull(firstReusableIndex)
+        val reusableOldOffset = if (firstReusableIndex < startCount) starts[firstReusableIndex] else null
         val delta = newEnd - oldEnd
         val reusableNewOffset = reusableOldOffset?.plus(delta)
         val scanLimit = reusableNewOffset ?: newText.length
@@ -157,22 +168,44 @@ internal class VirtualLineIndex(initialText: String) {
         }
 
         val removeFrom = lineBeforeEdit + 1
-        val removeUntil = firstReusableIndex.coerceIn(removeFrom, starts.size)
-        starts.subList(removeFrom, removeUntil).clear()
-        starts.addAll(removeFrom, replacementStarts)
+        val removeUntil = firstReusableIndex.coerceIn(removeFrom, startCount)
+        val removedCount = removeUntil - removeFrom
+        val oldCount = startCount
+        val newCount = oldCount - removedCount + replacementStarts.size
+        ensureCapacity(newCount)
+        if (replacementStarts.size != removedCount) {
+            starts.copyInto(
+                destination = starts,
+                destinationOffset = removeFrom + replacementStarts.size,
+                startIndex = removeUntil,
+                endIndex = oldCount,
+            )
+        }
+        replacementStarts.forEachIndexed { offsetIndex, lineStart ->
+            starts[removeFrom + offsetIndex] = lineStart
+        }
+        startCount = newCount
+
         val suffixStart = removeFrom + replacementStarts.size
-        for (index in suffixStart until starts.size) starts[index] += delta
+        for (index in suffixStart until startCount) starts[index] += delta
         sourceText = newText
     }
 
     private fun upperBound(offset: Int): Int {
         var low = 0
-        var high = starts.size
+        var high = startCount
         while (low < high) {
             val middle = (low + high) ushr 1
             if (starts[middle] <= offset) low = middle + 1 else high = middle
         }
         return low
+    }
+
+    private fun ensureCapacity(required: Int) {
+        if (required <= starts.size) return
+        var capacity = starts.size
+        while (capacity < required) capacity = (capacity * 2).coerceAtLeast(required)
+        starts = starts.copyOf(capacity)
     }
 
     private fun appendStarts(text: String, start: Int, end: Int, includeFinalEmptyLine: Boolean) {
@@ -181,7 +214,10 @@ internal class VirtualLineIndex(initialText: String) {
             val newline = text.indexOf('\n', cursor)
             if (newline < 0 || newline >= end) break
             val nextStart = newline + 1
-            if (includeFinalEmptyLine || nextStart < end) starts += nextStart
+            if (includeFinalEmptyLine || nextStart < end) {
+                ensureCapacity(startCount + 1)
+                starts[startCount++] = nextStart
+            }
             cursor = nextStart
         }
     }
