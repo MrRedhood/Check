@@ -206,6 +206,7 @@ internal fun WorkspaceBrowserPanel(
     var showFindReplace by remember(openedFile) { mutableStateOf(false) }
     var findQuery by remember(openedFile) { mutableStateOf("") }
     var replacementText by remember(openedFile) { mutableStateOf("") }
+    var selectedFindRange by remember(openedFile) { mutableStateOf<TextRange?>(null) }
     val editorFocusRequester = remember { FocusRequester() }
     var previousVirtualizedEditorMode by remember(openedFile) { mutableStateOf(useVirtualizedEditor) }
     LaunchedEffect(useVirtualizedEditor) {
@@ -242,6 +243,7 @@ internal fun WorkspaceBrowserPanel(
 
     LaunchedEffect(openedFile, editorText) {
         if (editorFieldValue.text != editorText) {
+            selectedFindRange = null
             editorFieldValue = TextFieldValue(editorText, selection = TextRange(editorText.length))
         }
     }
@@ -898,7 +900,11 @@ internal fun WorkspaceBrowserPanel(
                                 if (countMatches(editorFieldValue.text, findQuery) == 0) {
                                     message = if (findQuery.isBlank()) "Enter text to search for." else "No matches found."
                                 } else {
-                                    editorFieldValue = findNextMatch(editorFieldValue, findQuery)
+                                    val found = findNextMatch(editorFieldValue, findQuery)
+                                    editorFieldValue = found
+                                    selectedFindRange = found.selection.takeIf {
+                                        !it.collapsed && found.text.substring(it.min, it.max) == findQuery
+                                    }
                                     editorFocusRequester.requestFocus()
                                 }
                             },
@@ -923,7 +929,11 @@ internal fun WorkspaceBrowserPanel(
                                 if (countMatches(editorFieldValue.text, findQuery) == 0) {
                                     message = if (findQuery.isBlank()) "Enter text to search for." else "No matches found."
                                 } else {
-                                    editorFieldValue = findPreviousMatch(editorFieldValue, findQuery)
+                                    val found = findPreviousMatch(editorFieldValue, findQuery)
+                                    editorFieldValue = found
+                                    selectedFindRange = found.selection.takeIf {
+                                        !it.collapsed && found.text.substring(it.min, it.max) == findQuery
+                                    }
                                     editorFocusRequester.requestFocus()
                                 }
                             },
@@ -943,7 +953,13 @@ internal fun WorkspaceBrowserPanel(
                         )
                         TextButton(
                             onClick = {
-                                val (updated, didReplace) = replaceOneMatch(editorFieldValue, findQuery, replacementText)
+                                val selectedRange = selectedFindRange?.takeIf {
+                                    it.min >= 0 && it.max <= editorFieldValue.text.length &&
+                                        !it.collapsed && editorFieldValue.text.substring(it.min, it.max) == findQuery
+                                }
+                                val valueToReplace = selectedRange?.let { editorFieldValue.copy(selection = it) } ?: editorFieldValue
+                                val (updated, didReplace) = replaceOneMatch(valueToReplace, findQuery, replacementText)
+                                selectedFindRange = null
                                 if (didReplace) {
                                     if (updateEditorText(updated.text)) {
                                         editorFieldValue = updated
@@ -966,6 +982,7 @@ internal fun WorkspaceBrowserPanel(
                         TextButton(
                             onClick = {
                                 val (updated, count) = replaceAllMatches(editorFieldValue, findQuery, replacementText)
+                                selectedFindRange = null
                                 if (count > 0) {
                                     if (updateEditorText(updated.text)) {
                                         editorFieldValue = updated
@@ -1033,6 +1050,7 @@ internal fun WorkspaceBrowserPanel(
                         value = editorFieldValue,
                         path = openedFile.orEmpty(),
                         onValueChange = { newValue ->
+                            if (newValue.text != editorFieldValue.text) selectedFindRange = null
                             val accepted = updateEditorText(newValue.text)
                             if (accepted) {
                                 editorFieldValue = newValue
@@ -1062,6 +1080,7 @@ internal fun WorkspaceBrowserPanel(
                 BasicTextField(
                     value = editorFieldValue,
                     onValueChange = { newValue ->
+                        if (newValue.text != editorFieldValue.text) selectedFindRange = null
                         val accepted = updateEditorText(newValue.text)
                         if (accepted) {
                             editorFieldValue = newValue
