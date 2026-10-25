@@ -139,9 +139,14 @@ class MainActivityUiTest {
             runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertIsDisplayed() }.isSuccess
         }
 
-        // Clear the fixture text, then type naturally so the caret ends after the prefix.
-        composeRule.onNodeWithTag("workspace-editor-input").performTextReplacement("")
-        composeRule.onNodeWithTag("workspace-editor-input").performTextInput("fun pri")
+        // Focus the real editor, clear the fixture, and type naturally at the caret.
+        val editor = composeRule.onNodeWithTag("workspace-editor-input")
+        editor.performClick()
+        editor.performTextReplacement("")
+        editor.performTextInput("fun pri")
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { editor.assertTextContains("fun pri") }.isSuccess
+        }
         composeRule.waitUntil(timeoutMillis = 5_000) {
             runCatching { composeRule.onNodeWithTag("editor-completion-println").assertIsDisplayed() }.isSuccess
         }
