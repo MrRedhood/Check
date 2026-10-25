@@ -136,20 +136,20 @@ class MainActivityUiTest {
         composeRule.onNodeWithTag("workspace-entry-CompletionSample.kt").performClick()
         val editor = composeRule.onNodeWithTag("workspace-editor-input")
         waitForUiStage("completion editor opens with the sample text") {
-            runCatching { editor.assertTextContains("ready") }.isSuccess
+            runCatching { editor.assertTextContains("ready", substring = true) }.isSuccess
         }
 
         editor.performClick()
         editor.performTextInput(" fun pri")
         waitForUiStage("completion prefix reaches editor state") {
-            runCatching { editor.assertTextContains("fun pri") }.isSuccess
+            runCatching { editor.assertTextContains("fun pri", substring = true) }.isSuccess
         }
         waitForUiStage("println suggestion is rendered") {
             runCatching { composeRule.onNodeWithTag("editor-completion-println").assertIsDisplayed() }.isSuccess
         }
         composeRule.onNodeWithTag("editor-completion-println").performClick()
         waitForUiStage("chosen completion replaces the prefix") {
-            runCatching { editor.assertTextContains("fun println") }.isSuccess
+            runCatching { editor.assertTextContains("fun println", substring = true) }.isSuccess
         }
     }
 
@@ -955,6 +955,7 @@ class MainActivityUiTest {
             "workspace-editor-input",
             "workspace-editor-loading",
             "workspace-browser-message",
+            "workspace-safety-results",
         )
         return tags.joinToString(prefix = " [UI snapshot: ", postfix = "]") { tag ->
             val summary = runCatching {
