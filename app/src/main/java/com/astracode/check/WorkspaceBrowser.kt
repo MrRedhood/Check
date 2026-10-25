@@ -1076,8 +1076,37 @@ internal fun WorkspaceBrowserPanel(
             if (loading) {
                 Text("Opening file…", modifier = Modifier.testTag("workspace-editor-loading"))
             } else {
+                val completionSuggestions = remember(openedFile, editorFieldValue.text, editorFieldValue.selection) {
+                    if (editorFieldValue.selection.start != editorFieldValue.selection.end) {
+                        emptyList()
+                    } else {
+                        codeCompletionSuggestions(
+                            sourceText = editorFieldValue.text,
+                            path = openedFile.orEmpty(),
+                            caretOffset = editorFieldValue.selection.end,
+                        )
+                    }
+                }
                 val editorInteractionSource = remember(openedFile) { MutableInteractionSource() }
-                Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                Column(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                    CodeCompletionRow(
+                        suggestions = completionSuggestions,
+                        onSelect = { suggestion ->
+                            val completedValue = applyCodeCompletion(editorFieldValue, suggestion)
+                            if (completedValue != null) {
+                                val accepted = updateEditorText(completedValue.text)
+                                if (accepted) {
+                                    editorFieldValue = completedValue
+                                    selectedFindRange = null
+                                    message = "Completed: $suggestion"
+                                    runCatching { editorFocusRequester.requestFocus() }
+                                } else {
+                                    message = "The editor rejected this completion; the draft was left unchanged."
+                                }
+                            }
+                        },
+                    )
+                    Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 if (useVirtualizedEditor) {
                     VirtualizedCodeEditor(
                         value = editorFieldValue,
@@ -1177,6 +1206,7 @@ internal fun WorkspaceBrowserPanel(
                         runCatching { editorFocusRequester.requestFocus() }
                     },
                 )
+                    }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
