@@ -59,6 +59,9 @@ internal object WorkspaceArchive {
                 val seen = HashSet<String>()
                 var entries = 0
                 fun addFile(file: File, relative: String) {
+                    if (WorkspaceRecovery.isInternalPath(relative)) {
+                        throw IOException("Reserved recovery data cannot be included in an archive: $relative")
+                    }
                     if (Files.isSymbolicLink(file.toPath()) ||
                         !Files.isRegularFile(file.toPath(), LinkOption.NOFOLLOW_LINKS) &&
                         !Files.isDirectory(file.toPath(), LinkOption.NOFOLLOW_LINKS)) {
@@ -217,6 +220,9 @@ internal object WorkspaceArchive {
             relativePath.indexOf('\u0000') >= 0) {
             throw SecurityException("Only non-empty workspace-relative paths are allowed.")
         }
+        if (WorkspaceRecovery.isInternalPath(relativePath)) {
+            throw SecurityException("This path is reserved for workspace recovery data.")
+        }
         val parts = relativePath.split('/')
         if (parts.any { it.isEmpty() || it == "." || it == ".." }) throw SecurityException("Invalid workspace path.")
         val target = File(root, parts.joinToString(File.separator)).canonicalFile
@@ -238,6 +244,9 @@ internal object WorkspaceArchive {
         }
         val path = if (directory) rawName.removeSuffix("/") else rawName
         val parts = path.split('/')
+        if (WorkspaceRecovery.isInternalPath(path)) {
+            throw SecurityException("The ZIP contains a reserved workspace recovery path.")
+        }
         if (parts.any { it.isEmpty() || it == "." || it == ".." || it.toByteArray(Charsets.UTF_8).size > 255 }) {
             throw SecurityException("The ZIP contains an unsafe path.")
         }
