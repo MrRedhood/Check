@@ -38,6 +38,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -184,8 +185,7 @@ internal fun WorkspaceBrowserPanel(
     val sourceLineCount = remember(editorFieldValue.text) {
         editorFieldValue.text.count { it == '\n' } + 1
     }
-    val sourceLineCountState = remember(openedFile) { mutableStateOf(sourceLineCount) }
-    sourceLineCountState.value = sourceLineCount
+    val sourceLineCountState = rememberUpdatedState(sourceLineCount)
     var syntaxHighlightLines by remember(openedFile) { mutableStateOf(1..35) }
     val density = LocalDensity.current
     val editorChromeHeightPx = with(density) { 44.dp.toPx() }

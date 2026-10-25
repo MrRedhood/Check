@@ -121,7 +121,7 @@ class EditorTextToolsTest {
     fun syntaxHighlightWindowAddsExactlyFifteenLinesAndClampsToFileEdges() {
         assertEquals(1..35, syntaxHighlightWindow(1, 20, 1_000))
         assertEquals(85..135, syntaxHighlightWindow(100, 120, 1_000))
-        assertEquals(9..30, syntaxHighlightWindow(20, 30, 30))
+        assertEquals(5..30, syntaxHighlightWindow(20, 30, 30))
         assertEquals(1..1, syntaxHighlightWindow(1, 1, 1))
     }
 
@@ -133,9 +133,17 @@ class EditorTextToolsTest {
         assertTrue(source.length > 512 * 1024)
         val spans = findSyntaxHighlightSpans(source, "Large.kt", 101..110)
         assertTrue(spans.isNotEmpty())
-        val windowStart = source.indexOf('\n', source.indices.firstOrNull { source[it] == '\n' } ?: -1)
-            .let { first -> source.split('\n').take(100).sumOf { it.length + 1 } }
-        val windowEnd = source.split('\n').take(110).sumOf { it.length + 1 }
+        fun offsetAfterLines(lineCount: Int): Int {
+            var offset = 0
+            repeat(lineCount) {
+                val newline = source.indexOf('\n', offset)
+                if (newline < 0) return source.length
+                offset = newline + 1
+            }
+            return offset
+        }
+        val windowStart = offsetAfterLines(100)
+        val windowEnd = offsetAfterLines(110)
         assertTrue(spans.all { it.start >= windowStart && it.end <= windowEnd })
         assertTrue(spans.any { source.substring(it.start, it.end) == "val" })
         assertTrue(spans.none { source.substring(it.start, it.end) == "token99" })
