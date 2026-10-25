@@ -122,34 +122,34 @@ class MainActivityUiTest {
 
     @Test
     fun languageAwareCompletionAppearsAndCanBeApplied() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val workspaceRoot = File(context.filesDir, "workspace")
+        val sample = File(workspaceRoot, "CompletionSample.kt")
+        sample.writeText("fun main() = Unit")
         composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
         composeRule.waitUntil(timeoutMillis = 5_000) {
-            runCatching { composeRule.onNodeWithTag("workspace-entry-app").assertIsDisplayed() }.isSuccess
+            runCatching {
+                composeRule.onNodeWithTag("workspace-entry-CompletionSample.kt").assertIsDisplayed()
+            }.isSuccess
         }
-        composeRule.onNodeWithTag("workspace-entry-app").performClick()
-        composeRule.waitUntil(timeoutMillis = 5_000) {
-            runCatching { composeRule.onNodeWithTag("workspace-entry-src").assertIsDisplayed() }.isSuccess
-        }
-        composeRule.onNodeWithTag("workspace-entry-src").performClick()
-        composeRule.waitUntil(timeoutMillis = 5_000) {
-            runCatching { composeRule.onNodeWithTag("workspace-entry-Main.kt").assertIsDisplayed() }.isSuccess
-        }
-        composeRule.onNodeWithTag("workspace-entry-Main.kt").performClick()
+        composeRule.onNodeWithTag("workspace-entry-CompletionSample.kt").performClick()
         composeRule.waitUntil(timeoutMillis = 5_000) {
             runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertIsDisplayed() }.isSuccess
         }
 
-        composeRule.onNodeWithTag("workspace-editor-input").performTextReplacement("fun pri")
+        val editor = composeRule.onNodeWithTag("workspace-editor-input")
+        editor.performTextReplacement("fun pri")
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { editor.assertTextContains("fun pri") }.isSuccess
+        }
         composeRule.waitUntil(timeoutMillis = 5_000) {
             runCatching { composeRule.onNodeWithTag("editor-completion-println").assertIsDisplayed() }.isSuccess
         }
         composeRule.onNodeWithTag("editor-completion-println").performClick()
         composeRule.waitUntil(timeoutMillis = 5_000) {
-            runCatching {
-                composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("fun println")
-            }.isSuccess
+            runCatching { editor.assertTextContains("fun println") }.isSuccess
         }
-        composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("fun println")
+        editor.assertTextContains("fun println")
     }
 
     @Test
