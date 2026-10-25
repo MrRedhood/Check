@@ -46,6 +46,14 @@ class CodeCompletionTest {
     }
 
     @Test
+    fun completionFallsBackToTheFinalIdentifierWhenFocusMovesAway() {
+        val value = TextFieldValue("fun pri", selection = TextRange(0))
+        val completed = applyCodeCompletion(value, "println")
+        assertEquals("fun println", completed?.text)
+        assertEquals(TextRange(11), completed?.selection)
+    }
+
+    @Test
     fun compoundFileSuffixSelectsTheMoreSpecificLanguage() {
         assertEquals("Gradle Kotlin DSL", detectSyntaxLanguage("app/build.gradle.kts")?.name)
     }
