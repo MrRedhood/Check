@@ -2864,6 +2864,9 @@ private fun writeWorkspaceText(root: File, relativePath: String, text: String) {
 }
 
 private fun resolveWorkspacePath(root: File, relativePath: String): File {
+    if (WorkspaceRecovery.isInternalPath(relativePath)) {
+        throw SecurityException("This path is reserved for workspace system data.")
+    }
     if (relativePath.isNotEmpty() && (relativePath.startsWith("/") || relativePath.contains('\\') || relativePath.indexOf('\u0000') >= 0)) {
         throw SecurityException("Only workspace-relative paths are allowed.")
     }
