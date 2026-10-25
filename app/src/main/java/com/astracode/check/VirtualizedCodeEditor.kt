@@ -52,6 +52,8 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.platform.ClipboardManager
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
@@ -257,6 +259,7 @@ internal fun VirtualizedCodeEditor(
     testTag: String = "file-editor-input",
 ) {
     val source = value.text
+    val clipboardManager = LocalClipboardManager.current
     val lineIndex = remember(path) { VirtualLineIndex(source) }
     lineIndex.update(source)
     val listState = rememberLazyListState()
@@ -438,6 +441,7 @@ internal fun VirtualizedCodeEditor(
                                         lineText = lineText,
                                         value = value,
                                         lineIndex = lineIndex,
+                                        clipboardManager = clipboardManager,
                                         readOnly = readOnly,
                                         onValueChange = { next, editStart, oldEnd, newEnd ->
                                             if (onValueChange(next)) {
@@ -480,6 +484,7 @@ private fun handleVirtualEditorKey(
     lineText: String,
     value: TextFieldValue,
     lineIndex: VirtualLineIndex,
+    clipboardManager: ClipboardManager,
     readOnly: Boolean,
     onValueChange: (TextFieldValue, Int, Int, Int) -> Unit,
 ): Boolean {
@@ -498,7 +503,28 @@ private fun handleVirtualEditorKey(
         )
         return true
     }
+    if (event.isCtrlPressed && event.key == Key.C && !collapsed) {
+        clipboardManager.setText(AnnotatedString(source.substring(selection.min, selection.max)))
+        return true
+    }
     if (readOnly) return false
+    if (event.isCtrlPressed && event.key == Key.X && !collapsed) {
+        val start = selection.min.coerceIn(0, source.length)
+        val end = selection.max.coerceIn(start, source.length)
+        clipboardManager.setText(AnnotatedString(source.substring(start, end)))
+        val updated = source.replaceRange(start, end, "")
+        onValueChange(TextFieldValue(updated, selection = TextRange(start)), start, end, start)
+        return true
+    }
+    if (event.isCtrlPressed && event.key == Key.V) {
+        val pasted = clipboardManager.getText()?.text ?: return false
+        val start = selection.min.coerceIn(0, source.length)
+        val end = selection.max.coerceIn(start, source.length)
+        val updated = source.replaceRange(start, end, pasted)
+        val newEnd = start + pasted.length
+        onValueChange(TextFieldValue(updated, selection = TextRange(newEnd)), start, end, newEnd)
+        return true
+    }
 
     if (event.key == Key.Tab) {
         val start = selection.min.coerceIn(0, source.length)
