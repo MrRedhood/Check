@@ -513,8 +513,12 @@ internal fun WorkspaceBrowserPanel(
             return
         }
         scope.launch {
-            val tabsToSave = editorTabs.filter { it.path == sourcePath || (entry.isDirectory && it.path.startsWith(sourcePath + "/")) }
-                .filter { !it.isLoading && it.text != it.savedText }
+            val affectedTabs = editorTabs.filter { it.path == sourcePath || (entry.isDirectory && it.path.startsWith(sourcePath + "/")) }
+            if (affectedTabs.any { it.isLoading }) {
+                message = "Wait for the file to finish opening before changing its path."
+                return@launch
+            }
+            val tabsToSave = affectedTabs.filter { it.text != it.savedText }
             var failedSave: String? = null
             for (tab in tabsToSave) {
                 val saved = saveWorkspaceEditorTab(tab.path, tab.text)
@@ -2391,6 +2395,14 @@ internal fun WorkspaceBrowserPanel(
             confirmButton = {
                 TextButton(onClick = {
                     val raw = operationInput.trim()
+                    val destinationPathForReferences = when (kind) {
+                        "move" -> raw
+                        "rename" -> {
+                            val parent = entry.path.substringBeforeLast('/', "")
+                            if (parent.isEmpty()) raw else "$parent/$raw"
+                        }
+                        else -> ""
+                    }
                     scope.launch {
                         val result = runCatching {
                             withContext(Dispatchers.IO) {
@@ -2425,6 +2437,9 @@ internal fun WorkspaceBrowserPanel(
                             }
                         }
                         result.onSuccess {
+                            if (kind == "rename" || kind == "move") {
+                                updateWorkspacePathReferences(entry.path, destinationPathForReferences)
+                            }
                             operationEntry = null; operationKind = null; refreshKey++
                             message = when (kind) {
                                 "rename" -> "Renamed " + entry.name
