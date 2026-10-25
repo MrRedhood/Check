@@ -73,7 +73,7 @@ class VirtualizedCodeEditorTest {
     fun primitiveLineIndexHandlesHundredsOfThousandsOfLines() {
         val source = buildString {
             repeat(200_000) {
-                append("x\\n")
+                append("x\n")
             }
         }
         val index = VirtualLineIndex(source)
