@@ -501,6 +501,26 @@ internal fun WorkspaceBrowserPanel(
         firstDirtyAt = firstDirtyAt.entries.associate { rewriteWorkspacePath(it.key, oldPath, newPath) to it.value }
         lastEditedAt = lastEditedAt.entries.associate { rewriteWorkspacePath(it.key, oldPath, newPath) to it.value }
         autosaveRetryAt = autosaveRetryAt.entries.associate { rewriteWorkspacePath(it.key, oldPath, newPath) to it.value }
+        pendingCloseTabPath = pendingCloseTabPath?.let { rewriteWorkspacePath(it, oldPath, newPath) }
+    }
+
+    fun removeWorkspacePathReferences(removedPath: String, wasDirectory: Boolean) {
+        fun isRemoved(path: String): Boolean =
+            path == removedPath || (wasDirectory && path.startsWith(removedPath + "/"))
+        editorTabs.filter { isRemoved(it.path) }.forEach { clearEditorAutosaveSchedule(it.path) }
+        editorTabs = editorTabs.filterNot { isRemoved(it.path) }
+        if (openedFile?.let(::isRemoved) == true) {
+            openedFile = null
+            currentDirectory = removedPath.substringBeforeLast('/', "")
+        }
+        if (wasDirectory && (currentDirectory == removedPath || currentDirectory.startsWith(removedPath + "/"))) {
+            currentDirectory = removedPath.substringBeforeLast('/', "")
+        }
+        if (pendingCloseTabPath?.let(::isRemoved) == true) {
+            pendingCloseTabPath = null
+            showDiscardTabDialog = false
+        }
+        selectedPaths = selectedPaths.filterNotTo(linkedSetOf(), ::isRemoved)
     }
 
     fun moveEntryToDirectory(entry: WorkspaceEntry, destinationDirectory: String) {
@@ -2590,6 +2610,7 @@ internal fun WorkspaceBrowserPanel(
                                             if (!isSimpleWorkspaceName(zipName)) throw IOException("Enter a ZIP file name without path separators.")
                                             val archivePath = joinWorkspacePath(currentDirectory, zipName)
                                             WorkspaceArchive.moveToZip(root, paths, archivePath, currentDirectory)
+                                            removedPaths += paths
                                             paths.sortedByDescending { it.count { ch -> ch == '/' } }.forEach { path ->
                                                 links = updateSyncedPathsAfterDelete(context, root, externalRoot, links, path)
                                             }
@@ -2619,6 +2640,7 @@ internal fun WorkspaceBrowserPanel(
                                                     target.parentFile?.let { if (!it.exists() && !it.mkdirs()) throw IOException("Could not create destination parent.") }
                                                     try { Files.move(source.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE) }
                                                     catch (_: java.nio.file.AtomicMoveNotSupportedException) { Files.move(source.toPath(), target.toPath()) }
+                                                    completedMoves += sourcePath to targetPath
                                                     links = updateSyncedPathsAfterMove(context, root, externalRoot, links, sourcePath, targetPath)
                                                 } else {
                                                     copyWorkspaceEntry(root, sourcePath, targetPath)
@@ -2630,6 +2652,7 @@ internal fun WorkspaceBrowserPanel(
                                         else -> {
                                             paths.sortedByDescending { it.count { ch -> ch == '/' } }.forEach { path ->
                                                 trashedItems += WorkspaceRecovery.moveToTrash(root, path)
+                                                removedPaths += path
                                                 links = updateSyncedPathsAfterDelete(context, root, externalRoot, links, path)
                                             }
                                             "Moved ${paths.size} item(s) to Trash"
@@ -2639,6 +2662,12 @@ internal fun WorkspaceBrowserPanel(
                                 }
                             }
                             result.onSuccess { (links, summary, trashRecords) ->
+                                completedMoves.forEach { (oldPath, newPath) ->
+                                    updateWorkspacePathReferences(oldPath, newPath)
+                                }
+                                removedPaths.forEach { removedPath ->
+                                    removeWorkspacePathReferences(removedPath, directoryByPath[removedPath] == true)
+                                }
                                 syncedPaths = links
                                 recentTrashIds = trashRecords.map { it.id }
                                 bulkActionKind = null
@@ -2647,6 +2676,12 @@ internal fun WorkspaceBrowserPanel(
                                 refreshKey++
                                 message = if (trashRecords.isNotEmpty()) "$summary. Undo is available." else summary
                             }.onFailure { error ->
+                                completedMoves.forEach { (oldPath, newPath) ->
+                                    updateWorkspacePathReferences(oldPath, newPath)
+                                }
+                                removedPaths.forEach { removedPath ->
+                                    removeWorkspacePathReferences(removedPath, directoryByPath[removedPath] == true)
+                                }
                                 syncedPaths = loadSyncedPaths(context, root)
                                 recentTrashIds = trashedItems.map { it.id }
                                 bulkActionKind = null
