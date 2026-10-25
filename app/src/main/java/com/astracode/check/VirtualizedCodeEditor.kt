@@ -40,6 +40,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
@@ -446,11 +447,22 @@ private fun handleVirtualEditorKey(
     readOnly: Boolean,
     onValueChange: (TextFieldValue, Int, Int, Int) -> Unit,
 ): Boolean {
-    if (event.type != KeyEventType.KeyDown || readOnly) return false
+    if (event.type != KeyEventType.KeyDown) return false
     val source = value.text
     val selection = value.selection
     val collapsed = selection.collapsed
     val caret = selection.end.coerceIn(0, source.length)
+
+    if (event.isCtrlPressed && event.key == Key.A) {
+        onValueChange(
+            value.copy(selection = TextRange(0, source.length), composition = null),
+            0,
+            0,
+            0,
+        )
+        return true
+    }
+    if (readOnly) return false
 
     if (event.key == Key.Tab) {
         val start = selection.min.coerceIn(0, source.length)
@@ -511,7 +523,12 @@ private fun handleVirtualEditorKey(
 
     if (collapsed && event.key == Key.DirectionLeft && caret == lineStart && lineNumber > 0) {
         val target = lineIndex.lineEnd(lineNumber - 1)
-        onValueChange(value.copy(selection = TextRange(target), composition = null), target, target, target)
+        val targetSelection = if (event.isShiftPressed) {
+            TextRange(selection.start, target)
+        } else {
+            TextRange(target)
+        }
+        onValueChange(value.copy(selection = targetSelection, composition = null), target, target, target)
         return true
     }
 
@@ -519,7 +536,12 @@ private fun handleVirtualEditorKey(
         lineNumber < lineIndex.lineCount - 1
     ) {
         val target = lineIndex.lineStart(lineNumber + 1)
-        onValueChange(value.copy(selection = TextRange(target), composition = null), target, target, target)
+        val targetSelection = if (event.isShiftPressed) {
+            TextRange(selection.start, target)
+        } else {
+            TextRange(target)
+        }
+        onValueChange(value.copy(selection = targetSelection, composition = null), target, target, target)
         return true
     }
 
