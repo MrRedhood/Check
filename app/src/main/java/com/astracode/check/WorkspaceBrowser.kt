@@ -382,6 +382,14 @@ internal fun WorkspaceBrowserPanel(
         val existing = editorTabs.firstOrNull { it.path == path }
         if (existing != null) {
             currentDirectory = path.substringBeforeLast('/', "")
+            // Switch the text and selection synchronously with the active tab. The editor's
+            // keyed state also resets on openedFile; this explicit assignment avoids one-frame
+            // stale content when quickly switching between dirty drafts.
+            editorFieldValue = TextFieldValue(
+                existing.text,
+                selection = TextRange(existing.text.length),
+            )
+            selectedFindRange = null
             openedFile = path
             return
         }
