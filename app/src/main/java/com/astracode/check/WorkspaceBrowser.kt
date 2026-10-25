@@ -2726,8 +2726,9 @@ private fun joinWorkspacePath(parent: String, child: String): String =
     if (parent.isBlank()) child else "$parent/$child"
 
 private fun isSimpleWorkspaceName(value: String): Boolean =
-    value.isNotBlank() && value != "." && value != ".." && !value.contains('/') &&
-        !value.contains('\\') && value.indexOf('\u0000') < 0
+    value.isNotBlank() && value != "." && value != ".." &&
+        !value.startsWith(".astracode-", ignoreCase = true) &&
+        !value.contains('/') && !value.contains('\\') && value.indexOf('\u0000') < 0
 private fun copyWorkspaceEntry(root: File, sourcePath: String, targetPath: String) {
     val source = resolveWorkspacePath(root, sourcePath)
     val target = resolveWorkspacePath(root, targetPath)
