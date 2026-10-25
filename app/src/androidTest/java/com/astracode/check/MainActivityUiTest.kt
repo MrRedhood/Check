@@ -950,11 +950,32 @@ class MainActivityUiTest {
         assertEquals("hello 😀", sample.readText())
     }
 
+    private fun currentUiDiagnosticSnapshot(): String {
+        val tags = listOf(
+            "workspace-editor-input",
+            "workspace-editor-loading",
+            "workspace-browser-message",
+        )
+        return tags.joinToString(prefix = " [UI snapshot: ", postfix = "]") { tag ->
+            val summary = runCatching {
+                composeRule.onAllNodesWithTag(tag).fetchSemanticsNodes()
+                    .take(2)
+                    .joinToString(" | ") { node ->
+                        node.config.toString().replace('\n', ' ').take(700)
+                    }
+            }.getOrElse { "<unavailable: ${it.javaClass.simpleName}>" }
+            tag + "=" + summary.ifEmpty { "<none>" }
+        }
+    }
+
     private fun waitForUiStage(stage: String, timeoutMillis: Long = 5_000, condition: () -> Boolean) {
         try {
             composeRule.waitUntil(timeoutMillis = timeoutMillis, condition = condition)
         } catch (error: Throwable) {
-            throw AssertionError("Timed out waiting for UI stage: " + stage, error)
+            throw AssertionError(
+                "Timed out waiting for UI stage: " + stage + currentUiDiagnosticSnapshot(),
+                error,
+            )
         }
     }
 
