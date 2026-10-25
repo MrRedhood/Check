@@ -562,8 +562,14 @@ class MainActivityUiTest {
         composeRule.onNodeWithTag("workspace-editor-input")
             .performTextReplacement("Unsaved contents that must be recoverable")
         composeRule.onNodeWithTag("workspace-editor-back").performClick()
+        waitForUiStage("README row returns after leaving the editor") {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-README.txt").assertIsDisplayed() }.isSuccess
+        }
 
         composeRule.onNodeWithTag("workspace-toggle-selection").performClick()
+        waitForUiStage("README becomes selectable") {
+            runCatching { composeRule.onNodeWithTag("workspace-select-README.txt").assertIsDisplayed() }.isSuccess
+        }
         composeRule.onNodeWithTag("workspace-select-README.txt").performClick()
         composeRule.onNodeWithTag("workspace-bulk-delete").performClick()
         composeRule.onNodeWithTag("confirm-workspace-bulk-action").performClick()
@@ -899,13 +905,21 @@ class MainActivityUiTest {
         composeRule.onNodeWithTag("workspace-editor-replace-input").performTextReplacement("answer")
         composeRule.onNodeWithTag("workspace-editor-find-next").performClick()
         composeRule.onNodeWithTag("workspace-editor-replace-one").performClick()
-        composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("val answer = 1", substring = true)
-        composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("val target = 2", substring = true)
+        waitForUiStage("single replacement updates the editor") {
+            runCatching {
+                composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("val answer = 1", substring = true)
+                composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("val target = 2", substring = true)
+            }.isSuccess
+        }
 
         composeRule.onNodeWithTag("workspace-editor-replace-input").performTextReplacement("item")
         composeRule.onNodeWithTag("workspace-editor-replace-all").performClick()
-        composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("val item = 2", substring = true)
-        composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("val answer = 1", substring = true)
+        waitForUiStage("replace-all updates the editor") {
+            runCatching {
+                composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("val item = 2", substring = true)
+                composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("val answer = 1", substring = true)
+            }.isSuccess
+        }
 
         composeRule.onNodeWithTag("workspace-save-file").performClick()
         composeRule.waitUntil(timeoutMillis = 5_000) {
