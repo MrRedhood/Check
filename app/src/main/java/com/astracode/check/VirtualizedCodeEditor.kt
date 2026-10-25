@@ -372,7 +372,10 @@ internal fun VirtualizedCodeEditor(
                             modifier = Modifier
                                 .weight(1f)
                                 .then(if (isCaretLine) Modifier.focusRequester(focusRequester) else Modifier)
-                                .onFocusChanged { state -> editorHasFocus = state.isFocused }
+                                .onFocusChanged { state ->
+                                    if (state.isFocused) editorHasFocus = true
+                                    else if (isCaretLine) editorHasFocus = false
+                                }
                                 .onPreviewKeyEvent { event ->
                                     handleVirtualEditorKey(
                                         event = event,
@@ -476,8 +479,13 @@ private fun handleVirtualEditorKey(
         val targetStart = lineIndex.lineStart(targetLine)
         val targetEnd = lineIndex.lineEnd(targetLine)
         val targetCaret = targetStart + (caret - lineStart).coerceIn(0, targetEnd - targetStart)
+        val nextSelection = if (event.isShiftPressed) {
+            TextRange(selection.start, targetCaret)
+        } else {
+            TextRange(targetCaret)
+        }
         onValueChange(
-            value.copy(selection = TextRange(targetCaret), composition = null),
+            value.copy(selection = nextSelection, composition = null),
             targetCaret,
             targetCaret,
             targetCaret,
