@@ -566,7 +566,13 @@ class MainActivityUiTest {
         }
         composeRule.onNodeWithTag("workspace-editor-tabs")
             .performScrollToNode(hasTestTag("workspace-tab-app__src__Main.kt"))
+        composeRule.onNodeWithTag("workspace-tab-app__src__Main.kt").assertIsDisplayed()
         composeRule.onNodeWithTag("workspace-tab-app__src__Main.kt").performClick()
+        waitForUiStage("Main.kt tab becomes active") {
+            runCatching {
+                composeRule.onNodeWithTag("workspace-editor-active-file").assertTextEquals("Main.kt")
+            }.isSuccess
+        }
         waitForUiStage("Main.kt tab restores its unsaved draft", timeoutMillis = 10_000) {
             runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("fun main() = 42", substring = true) }.isSuccess
         }
@@ -958,8 +964,11 @@ class MainActivityUiTest {
         val tags = listOf(
             "workspace-editor-input",
             "workspace-editor-loading",
+            "workspace-editor-active-file",
             "workspace-browser-message",
             "workspace-safety-results",
+            "workspace-tab-README.txt",
+            "workspace-tab-app__src__Main.kt",
         )
         return tags.joinToString(prefix = " [UI snapshot: ", postfix = "]") { tag ->
             val summary = runCatching {

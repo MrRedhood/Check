@@ -885,7 +885,12 @@ internal fun WorkspaceBrowserPanel(
                     Icon(Icons.Filled.ArrowBack, contentDescription = null)
                     Text("Files")
                 }
-                Text(openedFile!!.substringAfterLast('/'), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    openedFile!!.substringAfterLast('/'),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.testTag("workspace-editor-active-file"),
+                )
             }
             Row(
                 modifier = Modifier
