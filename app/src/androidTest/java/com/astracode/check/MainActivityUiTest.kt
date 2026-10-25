@@ -603,8 +603,14 @@ class MainActivityUiTest {
         val draft = "This editor tab must follow its file"
         composeRule.onNodeWithTag("workspace-editor-input").performTextReplacement(draft)
         composeRule.onNodeWithTag("workspace-editor-back").performClick()
+        waitForUiStage("README row returns after leaving the editor") {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-README.txt").assertIsDisplayed() }.isSuccess
+        }
 
         composeRule.onNodeWithTag("workspace-toggle-selection").performClick()
+        waitForUiStage("README becomes selectable for bulk move") {
+            runCatching { composeRule.onNodeWithTag("workspace-select-README.txt").assertIsDisplayed() }.isSuccess
+        }
         composeRule.onNodeWithTag("workspace-select-README.txt").performClick()
         composeRule.onNodeWithTag("workspace-bulk-move").performClick()
         composeRule.onNodeWithTag("workspace-bulk-input").performTextReplacement("app")
