@@ -2423,11 +2423,32 @@ internal fun WorkspaceBrowserPanel(
                         else -> ""
                     }
                     scope.launch {
+                        // Protect open editor drafts before changing the path the autosave task uses.
+                        // A write that finishes after the rename could otherwise recreate the old file.
+                        if (kind == "rename" || kind == "move") {
+                            val affectedTabs = editorTabs.filter {
+                                it.path == entry.path ||
+                                    (entry.isDirectory && it.path.startsWith(entry.path + "/"))
+                            }
+                            if (affectedTabs.any { it.isLoading }) {
+                                message = "Wait for the file to finish opening before changing its path."
+                                return@launch
+                            }
+                            for (tab in affectedTabs.filter { it.text != it.savedText }) {
+                                val saved = saveWorkspaceEditorTab(tab.path, tab.text)
+                                if (saved.isFailure) {
+                                    message = "Could not save " + tab.path.substringAfterLast('/') +
+                                        " before changing its path: " +
+                                        (saved.exceptionOrNull()?.message ?: "unknown save error")
+                                    return@launch
+                                }
+                            }
+                        }
                         val result = runCatching {
                             withContext(Dispatchers.IO) {
                                 val source = resolveWorkspacePath(root, entry.path)
                                 val destinationPath = if (kind == "move" || kind == "extract") raw else {
-                                    if (!isSimpleWorkspaceName(raw)) throw IOException("Enter a valid name without path separators.")
+                                    if (!isSimpleWorkspaceName(raw)) throw IOException("Enter a valid name without path separators or reserved system names.")
                                     val parent = entry.path.substringBeforeLast('/', "")
                                     if (parent.isEmpty()) raw else "$parent/$raw"
                                 }
