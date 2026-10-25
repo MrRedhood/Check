@@ -121,6 +121,33 @@ class MainActivityUiTest {
     }
 
     @Test
+    fun languageAwareCompletionAppearsAndCanBeApplied() {
+        composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-app").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-entry-app").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-src").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-entry-src").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-Main.kt").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-entry-Main.kt").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertIsDisplayed() }.isSuccess
+        }
+
+        composeRule.onNodeWithTag("workspace-editor-input").performTextReplacement("fun pri")
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("editor-completion-println").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("editor-completion-println").performClick()
+        composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("fun println")
+    }
+
+    @Test
     fun longPressShowsFileOperationsAndBothSyncDirections() {
         val externalRoot = File(InstrumentationRegistry.getInstrumentation().targetContext.filesDir, "external-workspace")
         composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
