@@ -594,6 +594,8 @@ class MainActivityUiTest {
         }
 
         composeRule.onNodeWithTag("workspace-toggle-selection").performClick()
+        // Selection mode adds a toolbar, so scroll the row back into view before clicking it.
+        composeRule.onNodeWithTag("workspace-entry-README.txt").performScrollTo()
         // The clickable row owns the selection semantics; clicking the row is also
         // accessible and avoids depending on the nested checkbox's merged semantics.
         waitForUiStage("README row is selectable") {
@@ -637,6 +639,7 @@ class MainActivityUiTest {
         }
 
         composeRule.onNodeWithTag("workspace-toggle-selection").performClick()
+        composeRule.onNodeWithTag("workspace-entry-README.txt").performScrollTo()
         waitForUiStage("README row is selectable for bulk move") {
             runCatching { composeRule.onNodeWithTag("workspace-entry-README.txt").assertIsDisplayed() }.isSuccess
         }
