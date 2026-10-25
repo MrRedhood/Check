@@ -550,6 +550,38 @@ class MainActivityUiTest {
     }
 
     @Test
+    fun bulkDeleteSavesDirtyDraftBeforeMovingItToTrash() {
+        composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
+        waitForUiStage("README row before bulk delete") {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-README.txt").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-entry-README.txt").performClick()
+        waitForUiStage("README editor before bulk delete") {
+            runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-editor-input")
+            .performTextReplacement("Unsaved contents that must be recoverable")
+        composeRule.onNodeWithTag("workspace-editor-back").performClick()
+
+        composeRule.onNodeWithTag("workspace-toggle-selection").performClick()
+        composeRule.onNodeWithTag("workspace-select-README.txt").performClick()
+        composeRule.onNodeWithTag("workspace-bulk-delete").performClick()
+        composeRule.onNodeWithTag("confirm-workspace-bulk-action").performClick()
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            !File(workspaceRoot, "README.txt").exists() &&
+                WorkspaceRecovery.listTrash(workspaceRoot).any { it.originalPath == "README.txt" }
+        }
+        val record = WorkspaceRecovery.listTrash(workspaceRoot).single { it.originalPath == "README.txt" }
+        val payload = File(workspaceRoot, ".astracode-trash/items/${record.id}/payload")
+        assertEquals(true, payload.isFile)
+        assertEquals("Unsaved contents that must be recoverable", payload.readText())
+        composeRule.waitUntil(timeoutMillis = 2_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertIsDisplayed() }.isFailure
+        }
+    }
+
+    @Test
     fun dirtyEditorTabClosePromptDoesNotRaceAutosave() {
         composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
         waitForUiStage("README row") {
