@@ -75,6 +75,8 @@ internal fun FloatingEditorTools(
 ) {
     BoxWithConstraints(modifier = modifier) {
         val density = androidx.compose.ui.platform.LocalDensity.current
+        val parentWidth = maxWidth
+        val parentHeight = maxHeight
         val maxX = (maxWidth - 124.dp).coerceAtLeast(0.dp).value
         val maxY = (maxHeight - 48.dp).coerceAtLeast(0.dp).value
         var position by remember(editorKey) { mutableStateOf<Offset?>(null) }
@@ -107,7 +109,7 @@ internal fun FloatingEditorTools(
                     Box(
                         modifier = Modifier
                             .size(width = 42.dp, height = 48.dp)
-                            .pointerInput(editorKey, maxWidth, maxHeight) {
+                            .pointerInput(editorKey, parentWidth, parentHeight) {
                                 detectDragGestures { change, dragAmount ->
                                     change.consume()
                                     val current = position ?: defaultPosition
