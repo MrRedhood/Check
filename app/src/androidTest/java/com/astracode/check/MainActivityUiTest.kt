@@ -594,6 +594,9 @@ class MainActivityUiTest {
         }
 
         composeRule.onNodeWithTag("workspace-toggle-selection").performClick()
+        // Selection mode adds a toolbar above the virtualized file list. Ensure the row
+        // remains composed and visible before locating its nested checkbox.
+        composeRule.onNodeWithTag("workspace-entry-README.txt").performScrollTo()
         waitForUiStage("README becomes selectable") {
             runCatching { composeRule.onNodeWithTag("workspace-select-README.txt").assertIsDisplayed() }.isSuccess
         }
@@ -635,6 +638,7 @@ class MainActivityUiTest {
         }
 
         composeRule.onNodeWithTag("workspace-toggle-selection").performClick()
+        composeRule.onNodeWithTag("workspace-entry-README.txt").performScrollTo()
         waitForUiStage("README becomes selectable for bulk move") {
             runCatching { composeRule.onNodeWithTag("workspace-select-README.txt").assertIsDisplayed() }.isSuccess
         }
