@@ -327,7 +327,7 @@ internal fun VirtualizedCodeEditor(
                             value = TextFieldValue(highlightedLine, localSelection, localComposition),
                             onValueChange = { changedLineValue ->
                                 if (readOnly) return@BasicTextField
-                                val changedText = changedLineValue.text.text
+                                val changedText = changedLineValue.text
                                 val selection = value.selection
                                 if (changedText == lineText) {
                                     val nextSelection = TextRange(
