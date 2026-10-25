@@ -151,6 +151,8 @@ class WorkspaceRecoveryTest {
             assertTrue(WorkspaceRecovery.isInternalPath(".astracode-trash/items/x"))
             assertTrue(WorkspaceRecovery.isInternalPath(".astracode-write-abandoned.tmp"))
             assertTrue(WorkspaceRecovery.isInternalPath("src/.astracode-provider-backup.orphan"))
+            assertTrue(WorkspaceRecovery.isInternalPath(".ASTRACODE-TRASH/items/x"))
+            assertTrue(WorkspaceRecovery.isInternalPath("src/.ASTRACODE-BACKUP-orphan"))
             assertTrue(WorkspaceRecovery.search(root, WorkspaceSearchOptions(includeHidden = true)).none {
                 it.path.startsWith(".astracode-")
             })
@@ -163,6 +165,11 @@ class WorkspaceRecoveryTest {
             try {
                 WorkspaceRecovery.resolve(root, ".astracode-write-abandoned.tmp")
                 fail("System-generated files must not be treated as user workspace files.")
+            } catch (_: SecurityException) {
+            }
+            try {
+                WorkspaceRecovery.resolve(root, ".ASTRACODE-WRITE-abandoned.tmp")
+                fail("Case variants of system paths must also be rejected.")
             } catch (_: SecurityException) {
             }
         } finally {
