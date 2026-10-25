@@ -139,6 +139,7 @@ class MainActivityUiTest {
         }
 
         val editor = composeRule.onNodeWithTag("workspace-editor-input")
+        editor.performClick()
         editor.performTextInput("fun pri")
         waitForUiStage("completion prefix reaches editor state") {
             runCatching { editor.assertTextContains("fun pri") }.isSuccess
