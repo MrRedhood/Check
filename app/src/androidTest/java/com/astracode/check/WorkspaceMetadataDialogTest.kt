@@ -86,6 +86,21 @@ class WorkspaceMetadataDialogTest {
     }
 
     @Test
+    fun createDestinationFolderMovesTheSelectedItemAutomatically() {
+        openBrowser()
+        composeRule.onNodeWithTag("workspace-entry-README.txt").performTouchInput { longClick() }
+        composeRule.onNodeWithTag("workspace-action-change-path").performClick()
+        composeRule.onNodeWithTag("workspace-change-path-new-folder").performClick()
+        composeRule.onNodeWithTag("workspace-change-path-new-folder-name").performTextInput("moved-here")
+        composeRule.onNodeWithTag("workspace-change-path-create-folder").performClick()
+
+        val moved = File(workspaceRoot, "moved-here/README.txt")
+        composeRule.waitUntil(timeoutMillis = 5_000) { moved.isFile }
+        assertEquals("Workspace fixture\n", moved.readText())
+        assertEquals(false, File(workspaceRoot, "README.txt").exists())
+        assertEquals(true, File(workspaceRoot, "moved-here").isDirectory)
+    }
+    @Test
     fun longPressFolderCanCreateFileInsideThatFolder() {
         openBrowser()
         composeRule.onNodeWithTag("workspace-entry-app").performTouchInput { longClick() }
