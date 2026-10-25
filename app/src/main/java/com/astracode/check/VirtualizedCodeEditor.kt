@@ -326,8 +326,9 @@ internal fun VirtualizedCodeEditor(
                             value = TextFieldValue(highlightedLine, localSelection, localComposition),
                             onValueChange = { changedLineValue ->
                                 if (readOnly) return@BasicTextField
+                                val changedText = changedLineValue.text.text
                                 val selection = value.selection
-                                if (changedLineValue.text == lineText) {
+                                if (changedText == lineText) {
                                     val nextSelection = TextRange(
                                         lineStart + changedLineValue.selection.start,
                                         lineStart + changedLineValue.selection.end,
@@ -345,7 +346,7 @@ internal fun VirtualizedCodeEditor(
                                     val oldEditEnd: Int
                                     val newEditEnd: Int
                                     if (crossesLines) {
-                                        val inserted = insertedTextFromLineChange(lineText, changedLineValue.text)
+                                        val inserted = insertedTextFromLineChange(lineText, changedText)
                                         editStart = selection.min.coerceIn(0, source.length)
                                         oldEditEnd = selection.max.coerceIn(editStart, source.length)
                                         nextSource = source.replaceRange(editStart, oldEditEnd, inserted)
@@ -353,10 +354,10 @@ internal fun VirtualizedCodeEditor(
                                         nextSelection = TextRange(newEditEnd)
                                         nextComposition = null
                                     } else {
-                                        nextSource = source.replaceRange(lineStart, lineEnd, changedLineValue.text)
+                                        nextSource = source.replaceRange(lineStart, lineEnd, changedText)
                                         editStart = lineStart
                                         oldEditEnd = lineEnd
-                                        newEditEnd = lineStart + changedLineValue.text.length
+                                        newEditEnd = lineStart + changedText.length
                                         nextSelection = TextRange(
                                             lineStart + changedLineValue.selection.start,
                                             lineStart + changedLineValue.selection.end,
