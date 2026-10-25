@@ -213,6 +213,33 @@ class MainActivityUiTest {
     }
 
     @Test
+    fun syncingFolderDoesNotCopyOrDeleteInternalRecoveryArtifacts() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val externalRoot = File(context.filesDir, "external-workspace")
+        val sourceArtifact = File(workspaceRoot, "app/src/.ASTRACODE-backup-orphan")
+        val targetArtifact = File(externalRoot, "app/src/.ASTRACODE-backup-target")
+        sourceArtifact.writeText("source recovery data")
+        targetArtifact.writeText("target recovery data")
+
+        composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
+        waitForUiStage("app folder before sync") {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-app").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-entry-app").performTouchInput { longClick() }
+        composeRule.onNodeWithTag("workspace-action-sync").performClick()
+        composeRule.onNodeWithTag("sync-app-to-external").performClick()
+
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            File(externalRoot, "app/src/Main.kt").isFile &&
+                targetArtifact.isFile && targetArtifact.readText() == "target recovery data"
+        }
+        assertFalse(File(externalRoot, "app/src/.ASTRACODE-backup-orphan").exists())
+        assertTrue(sourceArtifact.isFile)
+        assertEquals("source recovery data", sourceArtifact.readText())
+        assertEquals("target recovery data", targetArtifact.readText())
+    }
+
+    @Test
     fun createsAndExtractsZipForMultipleItemsAndUpdatesLinkedExternalFolder() {
         val externalRoot = File(
             InstrumentationRegistry.getInstrumentation().targetContext.filesDir,
