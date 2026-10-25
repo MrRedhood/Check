@@ -76,6 +76,59 @@ class WorkspaceArchiveTest {
     }
 
     @Test
+    fun extractionRejectsCaseVariantReservedRecoveryPaths() {
+        val root = Files.createTempDirectory("check-zip-reserved-path").toFile()
+        try {
+            ZipOutputStream(File(root, "reserved.zip").outputStream()).use { zip ->
+                zip.putNextEntry(ZipEntry(".ASTRACODE-TRASH/items/legacy/payload"))
+                zip.write("must not be extracted".toByteArray(Charsets.UTF_8))
+                zip.closeEntry()
+            }
+            try {
+                WorkspaceArchive.extractZip(root, "reserved.zip", "restored")
+                fail("Case variants of internal recovery paths must be rejected.")
+            } catch (expected: SecurityException) {
+                assertTrue(expected.message.orEmpty().contains("reserved", ignoreCase = true))
+            }
+            assertFalse(File(root, "restored").exists())
+            assertFalse(File(root, ".ASTRACODE-TRASH").exists())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun archiveRejectsReservedPathVariantsAndRecoveryFilesInsideFolders() {
+        val root = Files.createTempDirectory("check-archive-reserved-path").toFile()
+        try {
+            File(root, "src").mkdirs()
+            File(root, "src/.ASTRACODE-backup-orphan").writeText("internal recovery data")
+            try {
+                WorkspaceArchive.createZip(root, listOf("src"), "leak.zip")
+                fail("Internal recovery files inside a folder must not be archived.")
+            } catch (expected: java.io.IOException) {
+                assertTrue(expected.message.orEmpty().contains("reserved", ignoreCase = true))
+            }
+            assertFalse(File(root, "leak.zip").exists())
+
+            try {
+                WorkspaceArchive.createZip(root, listOf(".ASTRACODE-TRASH"), "reserved.zip")
+                fail("Case variants of reserved roots must not be archive sources.")
+            } catch (_: SecurityException) {
+                // Expected.
+            }
+            try {
+                WorkspaceArchive.createZip(root, listOf("src"), ".ASTRACODE-TRASH.zip")
+                fail("Archives cannot be written into the reserved recovery namespace.")
+            } catch (_: SecurityException) {
+                // Expected.
+            }
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun extractionRefusesToOverwriteAnExistingDestination() {
         val root = Files.createTempDirectory("check-workspace-no-overwrite").toFile()
         try {
