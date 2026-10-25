@@ -394,9 +394,12 @@ internal fun supportedSyntaxLanguageCount(): Int = SYNTAX_LANGUAGES.map { it.nam
 internal fun detectSyntaxLanguage(path: String): SyntaxLanguageDefinition? {
     val fileName = path.replace('\\', '/').substringAfterLast('/').lowercase(Locale.ROOT)
     SYNTAX_LANGUAGES.firstOrNull { fileName in it.fileNames }?.let { return it }
-    val extension = fileName.substringAfterLast('.', "")
-    if (extension.isBlank()) return null
-    return SYNTAX_LANGUAGES.firstOrNull { extension in it.extensions }
+    return SYNTAX_LANGUAGES
+        .asSequence()
+        .flatMap { language -> language.extensions.asSequence().map { extension -> language to extension } }
+        .filter { (_, extension) -> fileName == extension || fileName.endsWith(".$extension") }
+        .maxByOrNull { (_, extension) -> extension.length }
+        ?.first
 }
 
 private val COMMON_KEYWORDS = (
