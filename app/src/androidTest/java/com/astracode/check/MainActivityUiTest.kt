@@ -594,13 +594,12 @@ class MainActivityUiTest {
         }
 
         composeRule.onNodeWithTag("workspace-toggle-selection").performClick()
-        // Selection mode adds a toolbar above the virtualized file list. Ensure the row
-        // remains composed and visible before locating its nested checkbox.
-        composeRule.onNodeWithTag("workspace-entry-README.txt").performScrollTo()
-        waitForUiStage("README becomes selectable") {
-            runCatching { composeRule.onNodeWithTag("workspace-select-README.txt").assertIsDisplayed() }.isSuccess
+        // The clickable row owns the selection semantics; clicking the row is also
+        // accessible and avoids depending on the nested checkbox's merged semantics.
+        waitForUiStage("README row is selectable") {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-README.txt").assertIsDisplayed() }.isSuccess
         }
-        composeRule.onNodeWithTag("workspace-select-README.txt").performClick()
+        composeRule.onNodeWithTag("workspace-entry-README.txt").performClick()
         composeRule.onNodeWithTag("workspace-bulk-delete").performClick()
         composeRule.onNodeWithTag("confirm-workspace-bulk-action").performClick()
 
@@ -638,11 +637,10 @@ class MainActivityUiTest {
         }
 
         composeRule.onNodeWithTag("workspace-toggle-selection").performClick()
-        composeRule.onNodeWithTag("workspace-entry-README.txt").performScrollTo()
-        waitForUiStage("README becomes selectable for bulk move") {
-            runCatching { composeRule.onNodeWithTag("workspace-select-README.txt").assertIsDisplayed() }.isSuccess
+        waitForUiStage("README row is selectable for bulk move") {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-README.txt").assertIsDisplayed() }.isSuccess
         }
-        composeRule.onNodeWithTag("workspace-select-README.txt").performClick()
+        composeRule.onNodeWithTag("workspace-entry-README.txt").performClick()
         composeRule.onNodeWithTag("workspace-bulk-move").performClick()
         composeRule.onNodeWithTag("workspace-bulk-input").performTextReplacement("app")
         composeRule.onNodeWithTag("confirm-workspace-bulk-action").performClick()
