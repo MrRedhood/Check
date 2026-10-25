@@ -170,6 +170,12 @@ class WorkspaceRecoveryTest {
         }
     }
 
+    @Test fun internalPathDetectionIgnoresCaseForReservedPrefixes() {
+        assertTrue(WorkspaceRecovery.isInternalPath(".ASTRACODE-TRASH/items/example"))
+        assertTrue(WorkspaceRecovery.isInternalPath("nested/.ASTRACODE-BACKUP-orphan"))
+        assertFalse(WorkspaceRecovery.isInternalPath(".gitignore"))
+    }
+
     @Test fun journalStoresOperationMetadataButNotFileContents() {
         val root = Files.createTempDirectory("check-operation-journal").toFile()
         try {
