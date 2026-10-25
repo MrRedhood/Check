@@ -144,6 +144,11 @@ class MainActivityUiTest {
             runCatching { composeRule.onNodeWithTag("editor-completion-println").assertIsDisplayed() }.isSuccess
         }
         composeRule.onNodeWithTag("editor-completion-println").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching {
+                composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("fun println")
+            }.isSuccess
+        }
         composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("fun println")
     }
 
