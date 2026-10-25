@@ -139,16 +139,11 @@ class MainActivityUiTest {
 
         val editor = composeRule.onNodeWithTag("workspace-editor-input")
         editor.performTextReplacement("fun pri")
-        composeRule.waitUntil(timeoutMillis = 5_000) {
-            runCatching { editor.assertTextContains("fun pri") }.isSuccess
-        }
+        editor.assertTextContains("fun pri")
         composeRule.waitUntil(timeoutMillis = 5_000) {
             runCatching { composeRule.onNodeWithTag("editor-completion-println").assertIsDisplayed() }.isSuccess
         }
         composeRule.onNodeWithTag("editor-completion-println").performClick()
-        composeRule.waitUntil(timeoutMillis = 5_000) {
-            runCatching { editor.assertTextContains("fun println") }.isSuccess
-        }
         editor.assertTextContains("fun println")
     }
 
