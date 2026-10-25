@@ -158,11 +158,14 @@ internal fun codeFoldingVisualTransformation(
             offsets[end] = output.length
             continue
         }
-        output.append(line.toString().padStart(digitWidth)).append(" │ ")
+        output.append(line.toString().padStart(digitWidth))
+        output.append(" │ ")
         appendStyledSource(start, end)
         val foldEnd = collapsedEnds[line]
         if (foldEnd != null && foldEnd > line) {
-            output.append(" … ").append(foldEnd - line).append(" lines folded …")
+            output.append(" … ")
+            output.append((foldEnd - line).toString())
+            output.append(" lines folded …")
             hiddenThrough = maxOf(hiddenThrough, foldEnd)
         }
         offsets[end] = output.length
