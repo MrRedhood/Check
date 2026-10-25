@@ -45,6 +45,9 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.platform.testTag
@@ -178,8 +181,30 @@ internal fun WorkspaceBrowserPanel(
     var findQuery by remember(openedFile) { mutableStateOf("") }
     var replacementText by remember(openedFile) { mutableStateOf("") }
     val editorFocusRequester = remember { FocusRequester() }
-    val lineNumberTransformation = remember(foldableRegions, collapsedFoldStarts, openedFile) {
-        codeFoldingVisualTransformation(foldableRegions, collapsedFoldStarts, openedFile)
+    val sourceLineCount = remember(editorFieldValue.text) {
+        editorFieldValue.text.count { it == '\n' } + 1
+    }
+    val sourceLineCountState = remember(openedFile) { mutableStateOf(sourceLineCount) }
+    sourceLineCountState.value = sourceLineCount
+    var syntaxHighlightLines by remember(openedFile) { mutableStateOf(1..35) }
+    val density = LocalDensity.current
+    val editorChromeHeightPx = with(density) { 44.dp.toPx() }
+    val viewportTracker = remember(openedFile, editorChromeHeightPx) {
+        EditorViewportTracker(chromeHeightPx = editorChromeHeightPx) { firstLine, lastLine ->
+            val nextWindow = syntaxHighlightWindow(
+                firstVisibleLine = firstLine,
+                lastVisibleLine = lastLine,
+                totalLines = sourceLineCountState.value,
+            )
+            if (nextWindow != syntaxHighlightLines) syntaxHighlightLines = nextWindow
+        }
+    }
+    val lineNumberTransformation = remember(
+        foldableRegions, collapsedFoldStarts, openedFile, syntaxHighlightLines,
+    ) {
+        codeFoldingVisualTransformation(
+            foldableRegions, collapsedFoldStarts, openedFile, syntaxHighlightLines,
+        )
     }
 
     LaunchedEffect(openedFile, editorText) {
@@ -901,7 +926,12 @@ internal fun WorkspaceBrowserPanel(
                         }
                     },
                     visualTransformation = lineNumberTransformation,
+                    onTextLayout = viewportTracker::onTextLayout,
                     modifier = Modifier
+                        .nestedScroll(viewportTracker)
+                        .onGloballyPositioned { coordinates ->
+                            viewportTracker.updateViewportHeight(coordinates.size.height.toFloat())
+                        }
                         .fillMaxWidth()
                         .weight(1f)
                         .then(

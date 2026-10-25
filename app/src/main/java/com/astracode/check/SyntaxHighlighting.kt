@@ -1,7 +1,11 @@
 package com.astracode.check
 
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
 import java.util.Locale
 
 internal enum class SyntaxProfile {
@@ -28,6 +32,95 @@ internal object SyntaxPalette {
     val Markup = Color(0xFFE5B567)
 }
 private const val MAX_HIGHLIGHTED_CHARS = 512 * 1024
+
+private const val SYNTAX_HIGHLIGHT_BUFFER_LINES = 15
+
+internal fun syntaxHighlightWindow(
+    firstVisibleLine: Int,
+    lastVisibleLine: Int,
+    totalLines: Int,
+    bufferLines: Int = SYNTAX_HIGHLIGHT_BUFFER_LINES,
+): IntRange {
+    val lineCount = totalLines.coerceAtLeast(1)
+    val first = firstVisibleLine.coerceIn(1, lineCount)
+    val last = lastVisibleLine.coerceIn(first, lineCount)
+    val padding = bufferLines.coerceAtLeast(0)
+    return (first - padding).coerceAtLeast(1)..(last + padding).coerceAtMost(lineCount)
+}
+
+/**
+ * Observes the TextField's native nested scrolling without consuming scroll deltas.
+ * The TextField keeps its native drag/fling behavior; this tracker only tells the lexer which
+ * logical source lines are currently inside the viewport.
+ */
+internal class EditorViewportTracker(
+    private val chromeHeightPx: Float = 0f,
+    private val onVisibleLinesChanged: (firstLine: Int, lastLine: Int) -> Unit,
+) : NestedScrollConnection {
+    private var layout: TextLayoutResult? = null
+    private var viewportHeightPx: Float = 0f
+    private var scrollOffsetPx: Float = 0f
+    private var latestTransformedText: String = ""
+
+    fun onTextLayout(result: TextLayoutResult) {
+        layout = result
+        latestTransformedText = result.layoutInput.text.text
+        publishVisibleLines()
+    }
+
+    fun updateViewportHeight(totalHeightPx: Float) {
+        viewportHeightPx = (totalHeightPx - chromeHeightPx).coerceAtLeast(1f)
+        publishVisibleLines()
+    }
+
+    override fun onPostScroll(
+        consumed: Offset,
+        available: Offset,
+        source: NestedScrollSource,
+    ): Offset {
+        if (consumed.y != 0f) {
+            val currentLayout = layout
+            val maxOffset = ((currentLayout?.size?.height ?: 0) - viewportHeightPx)
+                .coerceAtLeast(0f)
+            scrollOffsetPx = (scrollOffsetPx + consumed.y).coerceIn(0f, maxOffset)
+            publishVisibleLines()
+        }
+        // Do not consume scroll: native TextField drag and fling remain in control.
+        return Offset.Zero
+    }
+
+    private fun publishVisibleLines() {
+        val currentLayout = layout ?: return
+        if (currentLayout.lineCount <= 0 || latestTransformedText.isEmpty()) return
+        val maxOffset = (currentLayout.size.height - viewportHeightPx).coerceAtLeast(0f)
+        scrollOffsetPx = scrollOffsetPx.coerceIn(0f, maxOffset)
+        val firstY = scrollOffsetPx.coerceIn(0f, currentLayout.size.height.toFloat())
+        val lastY = (scrollOffsetPx + viewportHeightPx - 1f)
+            .coerceIn(0f, currentLayout.size.height.toFloat())
+        val firstVisualLine = currentLayout.getLineForVerticalPosition(firstY)
+        val lastVisualLine = currentLayout.getLineForVerticalPosition(lastY)
+        val firstLogical = logicalSourceLineAt(
+            latestTransformedText,
+            currentLayout.getLineStart(firstVisualLine),
+        ) ?: firstVisualLine + 1
+        val lastLogical = logicalSourceLineAt(
+            latestTransformedText,
+            currentLayout.getLineStart(lastVisualLine),
+        ) ?: lastVisualLine + 1
+        onVisibleLinesChanged(minOf(firstLogical, lastLogical), maxOf(firstLogical, lastLogical))
+    }
+
+    private fun logicalSourceLineAt(text: String, offset: Int): Int? {
+        if (text.isEmpty()) return null
+        val safeOffset = offset.coerceIn(0, text.length)
+        val lineStart = if (safeOffset == 0) 0 else text.lastIndexOf('\n', safeOffset - 1) + 1
+        val lineEnd = text.indexOf('\n', lineStart).let { if (it < 0) text.length else it }
+        val separator = text.indexOf(" │ ", lineStart)
+        if (separator < lineStart || separator > lineEnd) return null
+        return text.substring(lineStart, separator).trim().toIntOrNull()
+    }
+}
+
 
 /*
  * More than 150 recognized source/configuration formats share a small set of fast lexer profiles.
@@ -351,13 +444,34 @@ private fun styleFor(kind: String): SpanStyle = SpanStyle(color = when (kind) {
 private fun isIdentifierStart(c: Char) = c == '_' || c == '$' || c.isLetter()
 private fun isIdentifierPart(c: Char) = c == '_' || c == '$' || c.isLetterOrDigit()
 
-internal fun findSyntaxHighlightSpans(text: String, path: String): List<SyntaxHighlightSpan> {
-    if (text.isEmpty() || text.length > MAX_HIGHLIGHTED_CHARS) return emptyList()
+internal fun findSyntaxHighlightSpans(
+    sourceText: String,
+    path: String,
+    lineRange: IntRange? = null,
+): List<SyntaxHighlightSpan> {
+    if (sourceText.isEmpty()) return emptyList()
     val definition = detectSyntaxLanguage(path) ?: return emptyList()
     val profile = definition.profile
     if (profile == SyntaxProfile.PLAIN) return emptyList()
-    if (profile == SyntaxProfile.HTML) return highlightMarkup(text)
-    if (profile == SyntaxProfile.MARKDOWN) return highlightMarkdown(text)
+
+    val lineStarts = mutableListOf(0)
+    sourceText.forEachIndexed { index, character ->
+        if (character == '\n') lineStarts += index + 1
+    }
+    val totalLines = lineStarts.size
+    val requestedRange = lineRange ?: (1..totalLines)
+    val firstLine = requestedRange.first.coerceIn(1, totalLines)
+    val lastLine = requestedRange.last.coerceIn(firstLine, totalLines)
+    val sourceStart = lineStarts[firstLine - 1]
+    val sourceEnd = if (lastLine < totalLines) lineStarts[lastLine] else sourceText.length
+    val text = sourceText.substring(sourceStart, sourceEnd)
+    if (text.length > MAX_HIGHLIGHTED_CHARS) return emptyList()
+    if (profile == SyntaxProfile.HTML) {
+        return highlightMarkup(text).map { it.copy(start = it.start + sourceStart, end = it.end + sourceStart) }
+    }
+    if (profile == SyntaxProfile.MARKDOWN) {
+        return highlightMarkdown(text).map { it.copy(start = it.start + sourceStart, end = it.end + sourceStart) }
+    }
     val spans = ArrayList<SyntaxHighlightSpan>()
     fun add(start: Int, end: Int, kind: String) {
         if (end > start) spans += SyntaxHighlightSpan(start, end, styleFor(kind))
@@ -452,7 +566,7 @@ internal fun findSyntaxHighlightSpans(text: String, path: String): List<SyntaxHi
         }
         i++
     }
-    return spans
+    return spans.map { it.copy(start = it.start + sourceStart, end = it.end + sourceStart) }
 }
 
 private fun keywordsFor(profile: SyntaxProfile): Set<String> = when (profile) {

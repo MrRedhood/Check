@@ -116,6 +116,31 @@ class EditorTextToolsTest {
         assertTrue(spans.any { source.substring(it.start, it.end) == "42" && it.style.color == SyntaxPalette.Number })
     }
 
+
+    @Test
+    fun syntaxHighlightWindowAddsExactlyFifteenLinesAndClampsToFileEdges() {
+        assertEquals(1..35, syntaxHighlightWindow(1, 20, 1_000))
+        assertEquals(85..135, syntaxHighlightWindow(100, 120, 1_000))
+        assertEquals(9..30, syntaxHighlightWindow(20, 30, 30))
+        assertEquals(1..1, syntaxHighlightWindow(1, 1, 1))
+    }
+
+    @Test
+    fun largeFilesOnlyTokenizeTheRequestedLineWindow() {
+        val source = buildString {
+            repeat(40_000) { line -> append("val token$line = $line\n") }
+        }
+        assertTrue(source.length > 512 * 1024)
+        val spans = findSyntaxHighlightSpans(source, "Large.kt", 101..110)
+        assertTrue(spans.isNotEmpty())
+        val windowStart = source.indexOf('\n', source.indices.firstOrNull { source[it] == '\n' } ?: -1)
+            .let { first -> source.split('\n').take(100).sumOf { it.length + 1 } }
+        val windowEnd = source.split('\n').take(110).sumOf { it.length + 1 }
+        assertTrue(spans.all { it.start >= windowStart && it.end <= windowEnd })
+        assertTrue(spans.any { source.substring(it.start, it.end) == "val" })
+        assertTrue(spans.none { source.substring(it.start, it.end) == "token99" })
+    }
+
     @Test
     fun syntaxHighlightingPreservesEditorTextAndComposesWithLineNumbers() {
         val source = "fun answer() = 42\n"
