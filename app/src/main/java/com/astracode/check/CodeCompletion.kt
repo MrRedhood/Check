@@ -152,7 +152,8 @@ internal fun codeCompletionSuggestions(
 
 /** Replaces only the identifier prefix; the caller still submits the edit through its normal gate. */
 internal fun applyCodeCompletion(value: TextFieldValue, suggestion: String): TextFieldValue? {
-    if (value.selection.start != value.selection.end) return null
+    // A suggestion button can take focus while the editor's selection anchor changes.
+    // Complete the identifier immediately before the active caret instead of rejecting that edit.
     val range = codeCompletionPrefixRange(value.text, value.selection.end) ?: return null
     val prefix = value.text.substring(range.start, range.end)
     if (!suggestion.startsWith(prefix, ignoreCase = true)) return null
