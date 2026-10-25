@@ -96,7 +96,7 @@ internal object WorkspaceRecovery {
         if (segments.any { it.isBlank() || it == "." || it == ".." } || segments.size > MAX_DEPTH) {
             throw SecurityException("Invalid or excessively deep workspace path.")
         }
-        if (segments.any { it in internalDirectories || it.startsWith(".astracode-") }) {
+        if (isInternalPath(relativePath)) {
             throw SecurityException("This path is reserved for workspace system data.")
         }
         var current = canonicalRoot
