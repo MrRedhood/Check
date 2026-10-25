@@ -582,6 +582,48 @@ class MainActivityUiTest {
     }
 
     @Test
+    fun bulkMoveKeepsOpenEditorTabAttachedToMovedPath() {
+        composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
+        waitForUiStage("README row before bulk move") {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-README.txt").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-entry-README.txt").performClick()
+        waitForUiStage("README editor before bulk move") {
+            runCatching {
+                composeRule.onNodeWithTag("workspace-editor-input")
+                    .assertTextContains("Workspace fixture", substring = true)
+            }.isSuccess
+        }
+        val draft = "This editor tab must follow its file"
+        composeRule.onNodeWithTag("workspace-editor-input").performTextReplacement(draft)
+        composeRule.onNodeWithTag("workspace-editor-back").performClick()
+
+        composeRule.onNodeWithTag("workspace-toggle-selection").performClick()
+        composeRule.onNodeWithTag("workspace-select-README.txt").performClick()
+        composeRule.onNodeWithTag("workspace-bulk-move").performClick()
+        composeRule.onNodeWithTag("workspace-bulk-input").performTextReplacement("app")
+        composeRule.onNodeWithTag("confirm-workspace-bulk-action").performClick()
+
+        val moved = File(workspaceRoot, "app/README.txt")
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            moved.isFile && moved.readText() == draft && !File(workspaceRoot, "README.txt").exists()
+        }
+        composeRule.onNodeWithTag("workspace-entry-app").performClick()
+        waitForUiStage("moved README row") {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-README.txt").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-entry-README.txt").performClick()
+        waitForUiStage("moved README editor uses existing tab") {
+            runCatching {
+                composeRule.onNodeWithTag("workspace-editor-input").assertTextContains(draft, substring = true)
+                composeRule.onNodeWithTag("workspace-tab-app__README.txt").assertIsDisplayed()
+            }.isSuccess
+        }
+        composeRule.onAllNodesWithTag("workspace-tab-app__README.txt").assertCountEquals(1)
+        composeRule.onAllNodesWithTag("workspace-tab-README.txt").assertCountEquals(0)
+    }
+
+    @Test
     fun dirtyEditorTabClosePromptDoesNotRaceAutosave() {
         composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
         waitForUiStage("README row") {
