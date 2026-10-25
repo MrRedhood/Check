@@ -73,6 +73,20 @@ class WorkspaceMetadataDialogTest {
     }
 
     @Test
+    fun createFolderRejectsReservedInternalName() {
+        openBrowser()
+        composeRule.onNodeWithTag("workspace-create-menu").performClick()
+        composeRule.onNodeWithTag("workspace-create-folder").performClick()
+        composeRule.onNodeWithTag("workspace-new-folder-name")
+            .performTextInput(".astracode-check-reserved")
+        composeRule.onNodeWithTag("confirm-workspace-create-folder").performClick()
+        composeRule.waitForIdle()
+
+        assertEquals(false, File(workspaceRoot, ".astracode-check-reserved").exists())
+        composeRule.onNodeWithTag("workspace-new-folder-name").assertIsDisplayed()
+    }
+
+    @Test
     fun changePathMovesItemImmediatelyWhenDestinationFolderIsTapped() {
         openBrowser()
         composeRule.onNodeWithTag("workspace-entry-README.txt").performTouchInput { longClick() }
