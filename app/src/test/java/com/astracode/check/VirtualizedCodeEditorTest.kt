@@ -70,6 +70,46 @@ class VirtualizedCodeEditorTest {
     }
 
     @Test
+    fun incrementalIndexMatchesFullRebuildAcrossRandomEdits() {
+        val random = java.util.Random(7L)
+        var source = buildString {
+            repeat(100) {
+                append(listOf('a', 'b', '\n', '\r')[random.nextInt(4)])
+            }
+        }
+        val index = VirtualLineIndex(source)
+
+        repeat(250) {
+            val start = random.nextInt(source.length + 1)
+            val oldEnd = start + random.nextInt(source.length - start + 1)
+            val inserted = buildString {
+                repeat(random.nextInt(5)) {
+                    append(listOf('x', 'y', '\n', '\r')[random.nextInt(4)])
+                }
+            }
+            val updated = source.replaceRange(start, oldEnd, inserted)
+            index.update(
+                updated,
+                editStart = start,
+                oldEditEnd = oldEnd,
+                newEditEnd = start + inserted.length,
+            )
+            source = updated
+            val rebuilt = VirtualLineIndex(source)
+
+            assertEquals(rebuilt.lineCount, index.lineCount)
+            assertEquals(
+                (0 until rebuilt.lineCount).map { rebuilt.lineStart(it) },
+                (0 until index.lineCount).map { index.lineStart(it) },
+            )
+            assertEquals(
+                (0 until rebuilt.lineCount).map { rebuilt.lineEnd(it) },
+                (0 until index.lineCount).map { index.lineEnd(it) },
+            )
+        }
+    }
+
+    @Test
     fun primitiveLineIndexHandlesHundredsOfThousandsOfLines() {
         val source = buildString {
             repeat(200_000) {
