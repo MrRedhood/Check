@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Description
@@ -30,6 +31,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Divider
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -165,6 +169,15 @@ internal fun WorkspaceBrowserPanel(
     var metadataStatus by remember(root) { mutableStateOf("idle") }
     var showCreateFileDialog by remember(root) { mutableStateOf(false) }
     var createFileName by remember(root) { mutableStateOf("") }
+    var showCreateFolderDialog by remember(root) { mutableStateOf(false) }
+    var createFolderName by remember(root) { mutableStateOf("") }
+    var createInDirectory by remember(root) { mutableStateOf<String?>(null) }
+    var showCreateMenu by remember(root) { mutableStateOf(false) }
+    var pathPickerEntry by remember(root) { mutableStateOf<WorkspaceEntry?>(null) }
+    var pathPickerDirectories by remember(root) { mutableStateOf(emptyList<String>()) }
+    var pathPickerLoading by remember(root) { mutableStateOf(false) }
+    var pathPickerCreateFolder by remember(root) { mutableStateOf(false) }
+    var pathPickerFolderName by remember(root) { mutableStateOf("") }
     val context = LocalContext.current
     val externalRoot = remember(root) { File(root.parentFile, "external-workspace") }
     var syncedPaths by remember(root) { mutableStateOf(loadSyncedPaths(context, root)) }
@@ -173,6 +186,7 @@ internal fun WorkspaceBrowserPanel(
     val editorText = activeEditorTab?.text.orEmpty()
     val savedText = activeEditorTab?.savedText.orEmpty()
     val loading = activeEditorTab?.isLoading ?: false
+    val creationBaseDirectory = createInDirectory ?: (openedFile?.substringBeforeLast('/', "") ?: currentDirectory)
     var editorFieldValue by remember(openedFile) { mutableStateOf(TextFieldValue(editorText)) }
     val useVirtualizedEditor = shouldUseVirtualizedEditor(editorFieldValue.text.length)
     var wordWrapEnabled by remember(openedFile) { mutableStateOf(true) }
@@ -674,11 +688,24 @@ internal fun WorkspaceBrowserPanel(
         }
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(if (archivePath == null) "Workspace files" else "ZIP: " + archivePath!!.substringAfterLast("/"), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            if (openedFile == null && openedArchiveEntry == null && archivePath == null && !selectionMode) {
-                TextButton(
-                    onClick = { createFileName = ""; showCreateFileDialog = true },
-                    modifier = Modifier.testTag("workspace-create-file"),
-                ) { Text("New file") }
+            if (openedArchiveEntry == null && archivePath == null && !selectionMode) {
+                Box {
+                    IconButton(onClick = { createInDirectory = null; showCreateMenu = true }, modifier = Modifier.testTag("workspace-create-menu")) {
+                        Icon(Icons.Filled.Add, contentDescription = "Create file or folder")
+                    }
+                    DropdownMenu(expanded = showCreateMenu, onDismissRequest = { showCreateMenu = false }) {
+                        DropdownMenuItem(
+                            text = { Text("New file") },
+                            onClick = { showCreateMenu = false; createInDirectory = null; createFileName = ""; showCreateFileDialog = true },
+                            modifier = Modifier.testTag("workspace-create-file"),
+                        )
+                        DropdownMenuItem(
+                            text = { Text("New folder") },
+                            onClick = { showCreateMenu = false; createInDirectory = null; createFolderName = ""; showCreateFolderDialog = true },
+                            modifier = Modifier.testTag("workspace-create-folder"),
+                        )
+                    }
+                }
             }
             if (openedFile == null && openedArchiveEntry == null) {
                 TextButton(
@@ -2035,7 +2062,7 @@ internal fun WorkspaceBrowserPanel(
                         if (!isSimpleWorkspaceName(normalizedName)) {
                             message = "Enter a valid file name without path separators."
                         } else {
-                            val destinationPath = joinWorkspacePath(currentDirectory, normalizedName)
+                            val destinationPath = joinWorkspacePath(creationBaseDirectory, normalizedName)
                             scope.launch {
                                 val result = runCatching {
                                     withContext(Dispatchers.IO) {
@@ -2053,6 +2080,7 @@ internal fun WorkspaceBrowserPanel(
                                 result.onSuccess { path ->
                                     showCreateFileDialog = false
                                     createFileName = ""
+                                    createInDirectory = null
                                     activateEditorFile(path)
                                     refreshKey++
                                     message = "Created $normalizedName"
