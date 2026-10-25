@@ -441,8 +441,8 @@ internal fun findSyntaxHighlightSpans(text: String, path: String): List<SyntaxHi
             )
             val kind = when {
                 word in CONSTANT_WORDS -> "constant"
-                word in keywordsFor(profile) -> "keyword"
                 word in TYPE_WORDS || word.firstOrNull()?.isUpperCase() == true -> "type"
+                word in keywordsFor(profile) -> "keyword"
                 next < text.length && text[next] == '(' -> "function"
                 propertyProfile && next < text.length && text[next] == ':' -> "property"
                 else -> null
