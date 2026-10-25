@@ -125,7 +125,7 @@ class MainActivityUiTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val workspaceRoot = File(context.filesDir, "workspace")
         val sample = File(workspaceRoot, "CompletionSample.kt")
-        sample.writeText("")
+        sample.writeText("ready ")
 
         composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
         waitForUiStage("completion sample appears in workspace") {
@@ -134,22 +134,22 @@ class MainActivityUiTest {
             }.isSuccess
         }
         composeRule.onNodeWithTag("workspace-entry-CompletionSample.kt").performClick()
-        waitForUiStage("completion editor opens") {
-            runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertIsDisplayed() }.isSuccess
+        val editor = composeRule.onNodeWithTag("workspace-editor-input")
+        waitForUiStage("completion editor opens with the sample text") {
+            runCatching { editor.assertTextContains("ready ") }.isSuccess
         }
 
-        val editor = composeRule.onNodeWithTag("workspace-editor-input")
         editor.performClick()
         editor.performTextInput("fun pri")
         waitForUiStage("completion prefix reaches editor state") {
-            runCatching { editor.assertTextContains("fun pri") }.isSuccess
+            runCatching { editor.assertTextContains("ready fun pri") }.isSuccess
         }
         waitForUiStage("println suggestion is rendered") {
             runCatching { composeRule.onNodeWithTag("editor-completion-println").assertIsDisplayed() }.isSuccess
         }
         composeRule.onNodeWithTag("editor-completion-println").performClick()
         waitForUiStage("chosen completion replaces the prefix") {
-            runCatching { editor.assertTextContains("fun println") }.isSuccess
+            runCatching { editor.assertTextContains("ready fun println") }.isSuccess
         }
     }
 
