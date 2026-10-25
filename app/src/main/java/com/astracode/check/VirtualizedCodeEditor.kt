@@ -23,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -74,6 +75,7 @@ internal class VirtualLineIndex(initialText: String) {
     }
 
     val lineCount: Int get() = starts.size
+    fun lineStartsForSyntax(): List<Int> = starts
 
     fun lineStart(lineIndex: Int): Int = starts[lineIndex.coerceIn(0, starts.lastIndex)]
 
@@ -224,6 +226,17 @@ internal fun VirtualizedCodeEditor(
     lineIndex.update(source)
     val listState = rememberLazyListState()
     val activeLine = lineIndex.lineForOffset(value.selection.end.coerceIn(0, source.length))
+    val syntaxLines by remember(listState, lineIndex) {
+        derivedStateOf {
+            val visibleItems = listState.layoutInfo.visibleItemsInfo
+            val firstVisible = listState.firstVisibleItemIndex + 1
+            val lastVisible = (visibleItems.lastOrNull()?.index ?: listState.firstVisibleItemIndex) + 1
+            syntaxHighlightWindow(firstVisible, lastVisible, lineIndex.lineCount)
+        }
+    }
+    val syntaxSpans = remember(path, source, syntaxLines) {
+        findSyntaxHighlightSpans(source, path, syntaxLines, lineIndex.lineStartsForSyntax())
+    }
     var editorHasFocus by remember(path) { mutableStateOf(false) }
 
     LaunchedEffect(activeLine, lineIndex.lineCount) {
@@ -264,18 +277,24 @@ internal fun VirtualizedCodeEditor(
                     val lineStart = lineIndex.lineStart(lineNumber)
                     val lineEnd = lineIndex.lineEnd(lineNumber)
                     val lineText = source.substring(lineStart, lineEnd)
-                    val highlightedLine = remember(lineText, path) {
+                    val lineSyntaxSpans = remember(syntaxSpans, lineStart, lineEnd) {
+                        syntaxSpans.asSequence()
+                            .filter { it.start < lineEnd && it.end > lineStart }
+                            .map { span ->
+                                SyntaxHighlightSpan(
+                                    start = (span.start - lineStart).coerceIn(0, lineText.length),
+                                    end = (span.end - lineStart).coerceIn(0, lineText.length),
+                                    style = span.style,
+                                )
+                            }
+                            .filter { it.end > it.start }
+                            .toList()
+                    }
+                    val highlightedLine = remember(lineText, lineSyntaxSpans) {
                         val builder = AnnotatedString.Builder()
                         builder.append(lineText)
-                        findSyntaxHighlightSpans(
-                            lineText,
-                            path,
-                            lineRange = 1..1,
-                            sourceLineStarts = listOf(0),
-                        ).forEach { span ->
-                            val start = span.start.coerceIn(0, lineText.length)
-                            val end = span.end.coerceIn(start, lineText.length)
-                            if (end > start) builder.addStyle(span.style, start, end)
+                        lineSyntaxSpans.forEach { span ->
+                            builder.addStyle(span.style, span.start, span.end)
                         }
                         builder.toAnnotatedString()
                     }
