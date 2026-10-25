@@ -2533,6 +2533,48 @@ internal fun WorkspaceBrowserPanel(
                         val raw = bulkInput.trim()
                         val paths = selected
                         scope.launch {
+                            if (paths.isEmpty()) {
+                                message = "Select at least one item."
+                                bulkActionKind = null
+                                return@launch
+                            }
+                            val directoryByPath = runCatching {
+                                withContext(Dispatchers.IO) {
+                                    paths.associateWith { path ->
+                                        val source = resolveWorkspacePath(root, path)
+                                        if (!source.exists()) throw IOException("Selected item no longer exists: $path")
+                                        source.isDirectory
+                                    }
+                                }
+                            }.getOrElse { error ->
+                                message = error.message ?: "Could not verify the selected items."
+                                bulkActionKind = null
+                                return@launch
+                            }
+                            val affectedTabs = editorTabs.filter { tab ->
+                                directoryByPath.any { (sourcePath, isDirectory) ->
+                                    tab.path == sourcePath ||
+                                        (isDirectory && tab.path.startsWith(sourcePath + "/"))
+                                }
+                            }
+                            if (affectedTabs.any { it.isLoading }) {
+                                message = "Wait for selected files to finish opening before running this action."
+                                bulkActionKind = null
+                                return@launch
+                            }
+                            for (tab in affectedTabs.filter { it.text != it.savedText }) {
+                                val saved = saveWorkspaceEditorTab(tab.path, tab.text)
+                                if (saved.isFailure) {
+                                    message = "Could not save " + tab.path.substringAfterLast('/') +
+                                        " before the bulk action: " +
+                                        (saved.exceptionOrNull()?.message ?: "unknown save error")
+                                    bulkActionKind = null
+                                    return@launch
+                                }
+                            }
+
+                            val completedMoves = mutableListOf<Pair<String, String>>()
+                            val removedPaths = mutableListOf<String>()
                             val trashedItems = mutableListOf<WorkspaceTrashItem>()
                             val result = runCatching {
                                 withContext(Dispatchers.IO) {
