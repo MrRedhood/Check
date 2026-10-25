@@ -126,25 +126,30 @@ class MainActivityUiTest {
         val workspaceRoot = File(context.filesDir, "workspace")
         val sample = File(workspaceRoot, "CompletionSample.kt")
         sample.writeText("fun main() = Unit")
+
         composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
-        composeRule.waitUntil(timeoutMillis = 5_000) {
+        waitForUiStage("completion sample appears in workspace") {
             runCatching {
                 composeRule.onNodeWithTag("workspace-entry-CompletionSample.kt").assertIsDisplayed()
             }.isSuccess
         }
         composeRule.onNodeWithTag("workspace-entry-CompletionSample.kt").performClick()
-        composeRule.waitUntil(timeoutMillis = 5_000) {
+        waitForUiStage("completion editor opens") {
             runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertIsDisplayed() }.isSuccess
         }
 
         val editor = composeRule.onNodeWithTag("workspace-editor-input")
         editor.performTextReplacement("fun pri")
-        editor.assertTextContains("fun pri")
-        composeRule.waitUntil(timeoutMillis = 5_000) {
+        waitForUiStage("completion prefix reaches editor state") {
+            runCatching { editor.assertTextContains("fun pri") }.isSuccess
+        }
+        waitForUiStage("println suggestion is rendered") {
             runCatching { composeRule.onNodeWithTag("editor-completion-println").assertIsDisplayed() }.isSuccess
         }
         composeRule.onNodeWithTag("editor-completion-println").performClick()
-        editor.assertTextContains("fun println")
+        waitForUiStage("chosen completion replaces the prefix") {
+            runCatching { editor.assertTextContains("fun println") }.isSuccess
+        }
     }
 
     @Test
