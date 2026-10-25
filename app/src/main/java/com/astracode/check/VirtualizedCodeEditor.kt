@@ -34,7 +34,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
@@ -236,17 +235,19 @@ internal fun VirtualizedCodeEditor(
     val syntaxSpans = remember(path, source, syntaxLines) {
         findSyntaxHighlightSpans(source, path, syntaxLines, lineIndex.lineStartsForSyntax())
     }
-    var editorHasFocus by remember(path) { mutableStateOf(false) }
+    var hasInitializedCaretLine by remember(path) { mutableStateOf(false) }
 
     LaunchedEffect(activeLine, lineIndex.lineCount) {
         val visible = listState.layoutInfo.visibleItemsInfo
         if (visible.none { it.index == activeLine }) {
             listState.animateScrollToItem(activeLine.coerceIn(0, lineIndex.lineCount - 1))
         }
-        if (editorHasFocus) {
-            withFrameNanos { }
-            runCatching { focusRequester.requestFocus() }
+        if (!hasInitializedCaretLine) {
+            hasInitializedCaretLine = true
+            return@LaunchedEffect
         }
+        withFrameNanos { }
+        runCatching { focusRequester.requestFocus() }
     }
 
     val editorColors = OutlinedTextFieldDefaults.colors(
@@ -390,10 +391,6 @@ internal fun VirtualizedCodeEditor(
                             modifier = Modifier
                                 .weight(1f)
                                 .then(if (isCaretLine) Modifier.focusRequester(focusRequester) else Modifier)
-                                .onFocusChanged { state ->
-                                    if (state.isFocused) editorHasFocus = true
-                                    else if (isCaretLine) editorHasFocus = false
-                                }
                                 .onPreviewKeyEvent { event ->
                                     handleVirtualEditorKey(
                                         event = event,
