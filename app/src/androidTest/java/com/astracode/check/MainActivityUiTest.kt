@@ -393,7 +393,7 @@ class MainActivityUiTest {
         }
         composeRule.onNodeWithTag("workspace-safety-tools").performClick()
         composeRule.onNodeWithTag("workspace-safety-search-input").performTextReplacement("Main.kt")
-        composeRule.onNodeWithTag("workspace-safety-search").performClick()
+        composeRule.onNodeWithTag("workspace-safety-search").performScrollTo().assertIsDisplayed().performClick()
         waitForUiStage("search results complete", timeoutMillis = 10_000) {
             runCatching {
                 val text = composeRule.onNodeWithTag("workspace-safety-results")
