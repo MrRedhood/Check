@@ -125,7 +125,7 @@ class MainActivityUiTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val workspaceRoot = File(context.filesDir, "workspace")
         val sample = File(workspaceRoot, "CompletionSample.kt")
-        sample.writeText("fun main() = Unit")
+        sample.writeText("")
 
         composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
         waitForUiStage("completion sample appears in workspace") {
@@ -139,7 +139,7 @@ class MainActivityUiTest {
         }
 
         val editor = composeRule.onNodeWithTag("workspace-editor-input")
-        editor.performTextReplacement("fun pri")
+        editor.performTextInput("fun pri")
         waitForUiStage("completion prefix reaches editor state") {
             runCatching { editor.assertTextContains("fun pri") }.isSuccess
         }
