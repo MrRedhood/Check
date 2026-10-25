@@ -233,7 +233,7 @@ internal fun VirtualizedCodeEditor(
         }
         if (editorHasFocus) {
             withFrameNanos { }
-            focusRequester.requestFocus()
+            runCatching { focusRequester.requestFocus() }
         }
     }
 
@@ -473,7 +473,7 @@ private fun handleVirtualEditorKey(
         return true
     }
 
-    if (collapsed && (event.key == Key.DirectionUp || event.key == Key.DirectionDown)) {
+    if ((event.key == Key.DirectionUp || event.key == Key.DirectionDown) && collapsed) {
         val targetLine = if (event.key == Key.DirectionUp) lineNumber - 1 else lineNumber + 1
         if (targetLine !in 0 until lineIndex.lineCount) return true
         val targetStart = lineIndex.lineStart(targetLine)
