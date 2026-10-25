@@ -131,7 +131,12 @@ class EditorTextToolsTest {
             repeat(40_000) { line -> append("val token$line = $line\n") }
         }
         assertTrue(source.length > 512 * 1024)
-        val spans = findSyntaxHighlightSpans(source, "Large.kt", 101..110)
+        val spans = findSyntaxHighlightSpans(
+            source,
+            "Large.kt",
+            101..110,
+            syntaxSourceLineStarts(source),
+        )
         assertTrue(spans.isNotEmpty())
         fun offsetAfterLines(lineCount: Int): Int {
             var offset = 0
@@ -171,5 +176,28 @@ class EditorTextToolsTest {
         assertTrue(findSyntaxHighlightSpans("val x = 1", "notes.unknownext").isEmpty())
         assertTrue(findSyntaxHighlightSpans("x".repeat(512 * 1024 + 1), "main.kt").isEmpty())
     }
+
+
+    @Test
+    fun lineNumberTransformationHighlightsOnlyRequestedSourceLines() {
+        val source = "val before = 1\nval visible = 2\nval after = 3"
+        val transformed = codeFoldingVisualTransformation(
+            emptyList(),
+            emptySet(),
+            "Main.kt",
+            2..2,
+        ).filter(AnnotatedString(source))
+        val rendered = transformed.text.text
+        val before = rendered.indexOf("val")
+        val visible = rendered.indexOf("val", before + 1)
+        val after = rendered.indexOf("val", visible + 1)
+
+        assertTrue(transformed.text.spanStyles.none { it.start <= before && it.end > before })
+        assertTrue(transformed.text.spanStyles.any {
+            it.start <= visible && it.end > visible && it.item.color == SyntaxPalette.Keyword
+        })
+        assertTrue(transformed.text.spanStyles.none { it.start <= after && it.end > after })
+    }
+
 
 }

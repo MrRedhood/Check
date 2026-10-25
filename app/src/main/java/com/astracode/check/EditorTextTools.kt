@@ -111,7 +111,9 @@ internal fun codeFoldingVisualTransformation(
     }.associate { it.startLine to it.endLine }
 
     val offsets = IntArray(text.length + 1)
-    val syntaxSpans = sourcePath?.let { findSyntaxHighlightSpans(text, it, highlightedLines) }.orEmpty()
+    val syntaxSpans = sourcePath?.let {
+        findSyntaxHighlightSpans(text, it, highlightedLines, starts)
+    }.orEmpty()
     val output = AnnotatedString.Builder()
     var syntaxSpanIndex = 0
     fun appendStyledSource(start: Int, end: Int) {

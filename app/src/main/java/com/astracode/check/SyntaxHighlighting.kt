@@ -82,7 +82,7 @@ internal class EditorViewportTracker(
             val currentLayout = layout
             val maxOffset = ((currentLayout?.size?.height ?: 0) - viewportHeightPx)
                 .coerceAtLeast(0f)
-            scrollOffsetPx = (scrollOffsetPx + consumed.y).coerceIn(0f, maxOffset)
+            scrollOffsetPx = (scrollOffsetPx - consumed.y).coerceIn(0f, maxOffset)
             publishVisibleLines()
         }
         // Do not consume scroll: native TextField drag and fling remain in control.
@@ -382,6 +382,14 @@ Robot DSL|PYTHON|robotframework|
     )
 }
 
+internal fun syntaxSourceLineStarts(text: String): List<Int> {
+    val starts = mutableListOf(0)
+    text.forEachIndexed { index, character ->
+        if (character == '\n') starts += index + 1
+    }
+    return starts
+}
+
 internal fun supportedSyntaxLanguageCount(): Int = SYNTAX_LANGUAGES.map { it.name }.distinct().size
 internal fun detectSyntaxLanguage(path: String): SyntaxLanguageDefinition? {
     val fileName = path.replace('\\', '/').substringAfterLast('/').lowercase(Locale.ROOT)
@@ -448,16 +456,15 @@ internal fun findSyntaxHighlightSpans(
     sourceText: String,
     path: String,
     lineRange: IntRange? = null,
+    sourceLineStarts: List<Int>? = null,
 ): List<SyntaxHighlightSpan> {
     if (sourceText.isEmpty()) return emptyList()
     val definition = detectSyntaxLanguage(path) ?: return emptyList()
     val profile = definition.profile
     if (profile == SyntaxProfile.PLAIN) return emptyList()
 
-    val lineStarts = mutableListOf(0)
-    sourceText.forEachIndexed { index, character ->
-        if (character == '\n') lineStarts += index + 1
-    }
+    val lineStarts = sourceLineStarts ?: syntaxSourceLineStarts(sourceText)
+    if (lineStarts.isEmpty()) return emptyList()
     val totalLines = lineStarts.size
     val requestedRange = lineRange ?: (1..totalLines)
     val firstLine = requestedRange.first.coerceIn(1, totalLines)
