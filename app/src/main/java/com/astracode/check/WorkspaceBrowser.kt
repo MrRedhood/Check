@@ -44,6 +44,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
@@ -191,6 +192,14 @@ internal fun WorkspaceBrowserPanel(
     var findQuery by remember(openedFile) { mutableStateOf("") }
     var replacementText by remember(openedFile) { mutableStateOf("") }
     val editorFocusRequester = remember { FocusRequester() }
+    var previousVirtualizedEditorMode by remember(openedFile) { mutableStateOf(useVirtualizedEditor) }
+    LaunchedEffect(useVirtualizedEditor) {
+        if (previousVirtualizedEditorMode != useVirtualizedEditor) {
+            withFrameNanos { }
+            runCatching { editorFocusRequester.requestFocus() }
+            previousVirtualizedEditorMode = useVirtualizedEditor
+        }
+    }
     val sourceLineCount = remember(editorFieldValue.text.takeUnless { useVirtualizedEditor }) {
         if (useVirtualizedEditor) 1 else editorFieldValue.text.count { it == '\n' } + 1
     }
