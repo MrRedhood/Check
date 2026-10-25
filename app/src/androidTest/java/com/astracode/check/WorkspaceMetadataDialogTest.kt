@@ -60,6 +60,44 @@ class WorkspaceMetadataDialogTest {
     }
 
     @Test
+    fun plusMenuCreatesFolder() {
+        openBrowser()
+        composeRule.onNodeWithTag("workspace-create-menu").performClick()
+        composeRule.onNodeWithTag("workspace-create-folder").performClick()
+        composeRule.onNodeWithTag("workspace-new-folder-name").performTextInput("new-folder")
+        composeRule.onNodeWithTag("confirm-workspace-create-folder").performClick()
+
+        val created = File(workspaceRoot, "new-folder")
+        composeRule.waitUntil(timeoutMillis = 5_000) { created.isDirectory }
+        assertEquals(true, created.isDirectory)
+    }
+
+    @Test
+    fun changePathMovesItemImmediatelyWhenDestinationFolderIsTapped() {
+        openBrowser()
+        composeRule.onNodeWithTag("workspace-entry-README.txt").performTouchInput { longClick() }
+        composeRule.onNodeWithTag("workspace-action-change-path").performClick()
+        composeRule.onNodeWithTag("workspace-change-path-app").performClick()
+
+        val moved = File(workspaceRoot, "app/README.txt")
+        composeRule.waitUntil(timeoutMillis = 5_000) { moved.isFile }
+        assertEquals("Workspace fixture\n", moved.readText())
+        assertEquals(false, File(workspaceRoot, "README.txt").exists())
+    }
+
+    @Test
+    fun longPressFolderCanCreateFileInsideThatFolder() {
+        openBrowser()
+        composeRule.onNodeWithTag("workspace-entry-app").performTouchInput { longClick() }
+        composeRule.onNodeWithTag("workspace-action-new-file").performClick()
+        composeRule.onNodeWithTag("workspace-new-file-name").performTextInput("created-in-app.kt")
+        composeRule.onNodeWithTag("confirm-workspace-create-file").performClick()
+
+        val created = File(workspaceRoot, "app/created-in-app.kt")
+        composeRule.waitUntil(timeoutMillis = 5_000) { created.isFile }
+        assertEquals(true, created.isFile)
+    }
+    @Test
     fun metadataDialogOpensForPlainFile() {
         openBrowser()
         requestMetadata("workspace-entry-README.txt")
@@ -71,6 +109,7 @@ class WorkspaceMetadataDialogTest {
     @Test
     fun creatingFileWithoutExtensionAddsTxtAndMetadataShowsDescription() {
         openBrowser()
+        composeRule.onNodeWithTag("workspace-create-menu").performClick()
         composeRule.onNodeWithTag("workspace-create-file").performClick()
         composeRule.onNodeWithTag("workspace-new-file-name").performTextInput("my file (1)")
         composeRule.onNodeWithTag("confirm-workspace-create-file").performClick()
