@@ -526,11 +526,11 @@ class MainActivityUiTest {
         composeRule.onNodeWithTag("workspace-editor-input").performTextReplacement("fun main() = 42")
 
         composeRule.onNodeWithTag("workspace-tab-README.txt").performClick()
-        composeRule.waitUntil(timeoutMillis = 5_000) {
+        waitForUiStage("README tab restores its unsaved draft") {
             runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("README unsaved draft", substring = true) }.isSuccess
         }
         composeRule.onNodeWithTag("workspace-tab-app__src__Main.kt").performClick()
-        composeRule.waitUntil(timeoutMillis = 5_000) {
+        waitForUiStage("Main.kt tab restores its unsaved draft") {
             runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("fun main() = 42", substring = true) }.isSuccess
         }
 
