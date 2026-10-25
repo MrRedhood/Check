@@ -2842,12 +2842,17 @@ private fun copyTree(source: File, target: File, replace: Boolean) {
             if (!target.delete()) throw IOException("Could not replace destination.")
         }
         if (!target.exists() && !target.mkdirs()) throw IOException("Could not create folder: " + target.name)
-        val sourceChildren = source.listFiles() ?: throw IOException("Cannot read folder: " + source.path)
+        // Internal recovery files are not user workspace content. Never copy them,
+        // and never delete corresponding internal files in the destination during mirroring.
+        val sourceChildren = (source.listFiles() ?: throw IOException("Cannot read folder: " + source.path))
+            .filterNot { WorkspaceRecovery.isInternalPath(it.name) }
         val sourceNames = sourceChildren.map { it.name }.toSet()
         if (replace) {
-            (target.listFiles() ?: emptyArray()).filterNot { it.name in sourceNames }.forEach {
-                if (!it.deleteRecursively()) throw IOException("Could not remove stale item: " + it.name)
-            }
+            (target.listFiles() ?: emptyArray())
+                .filterNot { WorkspaceRecovery.isInternalPath(it.name) || it.name in sourceNames }
+                .forEach {
+                    if (!it.deleteRecursively()) throw IOException("Could not remove stale item: " + it.name)
+                }
         }
         sourceChildren.forEach { child -> copyTree(child, File(target, child.name), replace) }
     } else {
