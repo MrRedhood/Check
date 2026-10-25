@@ -70,6 +70,20 @@ class VirtualizedCodeEditorTest {
     }
 
     @Test
+    fun primitiveLineIndexHandlesHundredsOfThousandsOfLines() {
+        val source = buildString {
+            repeat(200_000) {
+                append("x\\n")
+            }
+        }
+        val index = VirtualLineIndex(source)
+
+        assertEquals(200_001, index.lineCount)
+        assertEquals(source.length, index.lineStart(200_000))
+        assertEquals("x", source.substring(index.lineStart(199_999), index.lineEnd(199_999)))
+    }
+
+    @Test
     fun largeDocumentThresholdLeavesShortFilesOnExistingEditor() {
         assertFalse(shouldUseVirtualizedEditor(VIRTUALIZED_EDITOR_THRESHOLD_CHARS - 1))
         assertTrue(shouldUseVirtualizedEditor(VIRTUALIZED_EDITOR_THRESHOLD_CHARS))
