@@ -10,6 +10,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -1949,6 +1950,16 @@ internal fun WorkspaceBrowserPanel(
         AlertDialog(onDismissRequest = { actionEntry = null },
             title = { Text(entry.name + " options") },
             text = { Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                if (entry.isDirectory) {
+                    TextButton(
+                        onClick = { createInDirectory = entry.path; createFileName = ""; showCreateFileDialog = true; actionEntry = null },
+                        modifier = Modifier.fillMaxWidth().testTag("workspace-action-new-file"),
+                    ) { Text("New file") }
+                    TextButton(
+                        onClick = { createInDirectory = entry.path; createFolderName = ""; showCreateFolderDialog = true; actionEntry = null },
+                        modifier = Modifier.fillMaxWidth().testTag("workspace-action-new-folder"),
+                    ) { Text("New folder") }
+                }
                 TextButton(
                     onClick = {
                         selectedPaths = setOf(entry.path)
@@ -2003,6 +2014,23 @@ internal fun WorkspaceBrowserPanel(
                     modifier = Modifier.fillMaxWidth().testTag("workspace-action-copy")) { Text("Copy") }
                 TextButton(onClick = { operationEntry = entry; operationKind = "move"; operationInput = entry.path; actionEntry = null },
                     modifier = Modifier.fillMaxWidth().testTag("workspace-action-move")) { Text("Move") }
+                TextButton(
+                    onClick = {
+                        actionEntry = null
+                        pathPickerEntry = entry
+                        pathPickerDirectories = emptyList()
+                        pathPickerLoading = true
+                        pathPickerCreateFolder = false
+                        pathPickerFolderName = ""
+                        scope.launch {
+                            runCatching { withContext(Dispatchers.IO) { listWorkspaceDirectories(root) } }
+                                .onSuccess { pathPickerDirectories = it }
+                                .onFailure { error -> message = error.message ?: "Could not list destination folders." }
+                            pathPickerLoading = false
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().testTag("workspace-action-change-path"),
+                ) { Text("Change path") }
                 TextButton(onClick = { pendingDeleteEntry = entry; actionEntry = null },
                     modifier = Modifier.fillMaxWidth().testTag("workspace-action-delete")) { Text("Delete") }
             } },
@@ -2099,6 +2127,59 @@ internal fun WorkspaceBrowserPanel(
         )
     }
 
+    if (showCreateFolderDialog) {
+        AlertDialog(
+            onDismissRequest = { showCreateFolderDialog = false; createInDirectory = null },
+            title = { Text("Create folder") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("The folder will be created inside " + creationBaseDirectory.ifEmpty { "Workspace root" } + ".")
+                    OutlinedTextField(
+                        value = createFolderName,
+                        onValueChange = { createFolderName = it },
+                        label = { Text("Folder name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("workspace-new-folder-name"),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val name = createFolderName.trim()
+                        if (!isSimpleWorkspaceName(name)) {
+                            message = "Enter a valid folder name without path separators."
+                        } else {
+                            val destinationPath = joinWorkspacePath(creationBaseDirectory, name)
+                            scope.launch {
+                                runCatching {
+                                    withContext(Dispatchers.IO) {
+                                        val target = resolveWorkspacePath(root, destinationPath)
+                                        if (target.exists()) throw IOException("A file or folder with that name already exists.")
+                                        val parent = target.parentFile ?: throw IOException("The destination folder is not available.")
+                                        if (!parent.isDirectory) throw IOException("The destination parent is not a folder.")
+                                        if (!target.mkdir()) throw IOException("Could not create the folder.")
+                                        syncLinkedWorkspacePaths(root, externalRoot, syncedPaths, destinationPath)
+                                    }
+                                }.onSuccess {
+                                    showCreateFolderDialog = false
+                                    createFolderName = ""
+                                    createInDirectory = null
+                                    currentDirectory = destinationPath
+                                    refreshKey++
+                                    message = "Created folder " + name
+                                }.onFailure { error -> message = error.message ?: "Could not create folder." }
+                            }
+                        }
+                    },
+                    modifier = Modifier.testTag("confirm-workspace-create-folder"),
+                ) { Text("Create folder") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCreateFolderDialog = false; createInDirectory = null }, modifier = Modifier.testTag("cancel-workspace-create-folder")) { Text("Cancel") }
+            },
+        )
+    }
     if (showDiscardTabDialog) {
         val pathToClose = pendingCloseTabPath
         val tabToClose = editorTabs.firstOrNull { it.path == pathToClose }
