@@ -173,10 +173,13 @@ internal fun WorkspaceBrowserPanel(
     val savedText = activeEditorTab?.savedText.orEmpty()
     val loading = activeEditorTab?.isLoading ?: false
     var editorFieldValue by remember(openedFile) { mutableStateOf(TextFieldValue(editorText)) }
+    val useVirtualizedEditor = shouldUseVirtualizedEditor(editorFieldValue.text.length)
     var wordWrapEnabled by remember(openedFile) { mutableStateOf(true) }
     val editorHorizontalScrollState = rememberScrollState()
-    var collapsedFoldStarts by remember(openedFile, editorFieldValue.text) { mutableStateOf(emptySet<Int>()) }
-    val foldableRegions = remember(editorFieldValue.text) { findCodeFoldRegions(editorFieldValue.text) }
+    var collapsedFoldStarts by remember(openedFile, useVirtualizedEditor) { mutableStateOf(emptySet<Int>()) }
+    val foldableRegions = remember(editorFieldValue.text.takeUnless { useVirtualizedEditor }) {
+        if (useVirtualizedEditor) emptyList() else findCodeFoldRegions(editorFieldValue.text)
+    }
     val visibleFoldableRegions = foldableRegions.filter { candidate ->
         foldableRegions.none { parent ->
             parent.startLine in collapsedFoldStarts &&
@@ -188,8 +191,8 @@ internal fun WorkspaceBrowserPanel(
     var findQuery by remember(openedFile) { mutableStateOf("") }
     var replacementText by remember(openedFile) { mutableStateOf("") }
     val editorFocusRequester = remember { FocusRequester() }
-    val sourceLineCount = remember(editorFieldValue.text) {
-        editorFieldValue.text.count { it == '\n' } + 1
+    val sourceLineCount = remember(editorFieldValue.text.takeUnless { useVirtualizedEditor }) {
+        if (useVirtualizedEditor) 1 else editorFieldValue.text.count { it == '\n' } + 1
     }
     val sourceLineCountState = rememberUpdatedState(sourceLineCount)
     var syntaxHighlightLines by remember(openedFile) { mutableStateOf(1..35) }
@@ -918,6 +921,37 @@ internal fun WorkspaceBrowserPanel(
                 Text("Opening file…", modifier = Modifier.testTag("workspace-editor-loading"))
             } else {
                 val editorInteractionSource = remember(openedFile) { MutableInteractionSource() }
+                if (useVirtualizedEditor) {
+                    VirtualizedCodeEditor(
+                        value = editorFieldValue,
+                        path = openedFile.orEmpty(),
+                        onValueChange = { newValue ->
+                            val accepted = updateEditorText(newValue.text)
+                            if (accepted) {
+                                editorFieldValue = newValue
+                            } else {
+                                val currentText = editorTabs.firstOrNull { it.path == openedFile }?.text.orEmpty()
+                                editorFieldValue = TextFieldValue(
+                                    currentText,
+                                    selection = TextRange(newValue.selection.end.coerceIn(0, currentText.length)),
+                                )
+                            }
+                            accepted
+                        },
+                        readOnly = false,
+                        wordWrapEnabled = wordWrapEnabled,
+                        focusRequester = editorFocusRequester,
+                        interactionSource = editorInteractionSource,
+                        textColor = MaterialTheme.colorScheme.onSurface,
+                        cursorColor = MaterialTheme.colorScheme.primary,
+                        lineNumberColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        focusColor = MaterialTheme.colorScheme.primary,
+                        borderColor = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.fillMaxWidth().weight(1f),
+                        label = "File contents",
+                        testTag = "workspace-editor-input",
+                    )
+                } else {
                 BasicTextField(
                     value = editorFieldValue,
                     onValueChange = { newValue ->
@@ -962,6 +996,7 @@ internal fun WorkspaceBrowserPanel(
                         )
                     },
                 )
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = {
