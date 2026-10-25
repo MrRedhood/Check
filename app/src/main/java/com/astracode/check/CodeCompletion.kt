@@ -150,20 +150,33 @@ internal fun codeCompletionSuggestions(
     return result.values.take(limit.coerceAtMost(16))
 }
 
-/** Replaces only the identifier prefix; the caller still submits the edit through its normal gate. */
-internal fun applyCodeCompletion(value: TextFieldValue, suggestion: String): TextFieldValue? {
-    // A suggestion button can move focus and disturb the editor caret. Prefer the current caret,
-    // but fall back to the final identifier when it still matches this suggestion.
-    val caretRange = codeCompletionPrefixRange(value.text, value.selection.end)
-    val endRange = codeCompletionPrefixRange(value.text, value.text.length)
-    val range = listOfNotNull(caretRange, endRange).firstOrNull { candidateRange ->
-        val candidatePrefix = value.text.substring(candidateRange.start, candidateRange.end)
-        suggestion.startsWith(candidatePrefix, ignoreCase = true)
-    } ?: return null
+/**
+ * Applies a suggestion to a prefix range captured when the suggestion row was rendered.
+ * The range remains stable even if tapping a suggestion moves focus and changes the editor caret.
+ */
+internal fun applyCodeCompletionAtRange(
+    value: TextFieldValue,
+    suggestion: String,
+    range: TextRange,
+): TextFieldValue? {
+    if (range.start < 0 || range.end > value.text.length || range.start >= range.end) return null
     val prefix = value.text.substring(range.start, range.end)
     if (!suggestion.startsWith(prefix, ignoreCase = true)) return null
     val nextText = value.text.replaceRange(range.start, range.end, suggestion)
     return TextFieldValue(nextText, selection = TextRange(range.start + suggestion.length))
+}
+
+/** Replaces only the identifier prefix; the caller still submits the edit through its normal gate. */
+internal fun applyCodeCompletion(value: TextFieldValue, suggestion: String): TextFieldValue? {
+    val caretRange = codeCompletionPrefixRange(value.text, value.selection.end)
+    val endRange = codeCompletionPrefixRange(value.text, value.text.length)
+    val range = listOfNotNull(caretRange, endRange).firstOrNull { candidateRange ->
+        suggestion.startsWith(
+            value.text.substring(candidateRange.start, candidateRange.end),
+            ignoreCase = true,
+        )
+    } ?: return null
+    return applyCodeCompletionAtRange(value, suggestion, range)
 }
 
 @Composable

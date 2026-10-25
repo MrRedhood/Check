@@ -1076,14 +1076,25 @@ internal fun WorkspaceBrowserPanel(
             if (loading) {
                 Text("Opening file…", modifier = Modifier.testTag("workspace-editor-loading"))
             } else {
+                val completionValueAtRender = editorFieldValue
+                val completionPrefixRangeAtRender = if (
+                    completionValueAtRender.selection.start == completionValueAtRender.selection.end
+                ) {
+                    codeCompletionPrefixRange(
+                        completionValueAtRender.text,
+                        completionValueAtRender.selection.end,
+                    )
+                } else {
+                    null
+                }
                 val completionSuggestions = remember(openedFile, editorFieldValue.text, editorFieldValue.selection) {
-                    if (editorFieldValue.selection.start != editorFieldValue.selection.end) {
+                    if (completionPrefixRangeAtRender == null) {
                         emptyList()
                     } else {
                         codeCompletionSuggestions(
-                            sourceText = editorFieldValue.text,
+                            sourceText = completionValueAtRender.text,
                             path = openedFile.orEmpty(),
-                            caretOffset = editorFieldValue.selection.end,
+                            caretOffset = completionValueAtRender.selection.end,
                         )
                     }
                 }
@@ -1092,7 +1103,10 @@ internal fun WorkspaceBrowserPanel(
                     CodeCompletionRow(
                         suggestions = completionSuggestions,
                         onSelect = { suggestion ->
-                            val completedValue = applyCodeCompletion(editorFieldValue, suggestion)
+                            val stableRange = completionPrefixRangeAtRender
+                            val completedValue = stableRange?.let {
+                                applyCodeCompletionAtRange(completionValueAtRender, suggestion, it)
+                            }
                             if (completedValue != null) {
                                 val accepted = updateEditorText(completedValue.text)
                                 if (accepted) {

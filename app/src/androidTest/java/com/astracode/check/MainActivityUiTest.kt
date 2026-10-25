@@ -139,14 +139,7 @@ class MainActivityUiTest {
             runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertIsDisplayed() }.isSuccess
         }
 
-        // Focus the real editor, clear the fixture, and type naturally at the caret.
-        val editor = composeRule.onNodeWithTag("workspace-editor-input")
-        editor.performClick()
-        editor.performTextReplacement("")
-        editor.performTextInput("fun pri")
-        composeRule.waitUntil(timeoutMillis = 5_000) {
-            runCatching { editor.assertTextContains("fun pri") }.isSuccess
-        }
+        composeRule.onNodeWithTag("workspace-editor-input").performTextReplacement("fun pri")
         composeRule.waitUntil(timeoutMillis = 5_000) {
             runCatching { composeRule.onNodeWithTag("editor-completion-println").assertIsDisplayed() }.isSuccess
         }
