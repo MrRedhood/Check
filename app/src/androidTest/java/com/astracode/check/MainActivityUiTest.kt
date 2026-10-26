@@ -305,7 +305,17 @@ class MainActivityUiTest {
 
         composeRule.onNodeWithTag("workspace-toggle-selection").performClick()
         composeRule.onNodeWithTag("workspace-select-build.gradle.kts").performClick()
+        waitForUiStage("build.gradle.kts is selected") {
+            runCatching {
+                composeRule.onNodeWithTag("workspace-selection-count").assertTextEquals("1 selected")
+            }.isSuccess
+        }
         composeRule.onNodeWithTag("workspace-select-src").performClick()
+        waitForUiStage("build.gradle.kts and src are selected") {
+            runCatching {
+                composeRule.onNodeWithTag("workspace-selection-count").assertTextEquals("2 selected")
+            }.isSuccess
+        }
         composeRule.onNodeWithTag("workspace-bulk-zip").performClick()
         composeRule.onNodeWithTag("workspace-bulk-input").performTextReplacement("bundle.zip")
         composeRule.onNodeWithTag("confirm-workspace-bulk-action").performClick()
@@ -971,6 +981,8 @@ class MainActivityUiTest {
             "workspace-editor-input",
             "workspace-editor-loading",
             "workspace-editor-active-file",
+            "workspace-selection-count",
+            "workspace-bulk-input",
             "workspace-browser-message",
             "workspace-safety-results",
             "workspace-tab-README.txt",
