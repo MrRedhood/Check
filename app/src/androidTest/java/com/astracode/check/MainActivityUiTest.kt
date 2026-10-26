@@ -1281,7 +1281,7 @@ class MainActivityUiTest {
 
         composeRule.waitUntil(timeoutMillis = 10_000) {
             runCatching {
-                composeRule.onNodeWithTag("file-editor-input").assertTextContains("fun main() = Unit", substring = true)
+                composeRule.onNodeWithTag("workspace-editor-input").assertTextContains("fun main() = Unit", substring = true)
             }.isSuccess
         }
         assertEquals("fun main() = Unit\n", String(Files.readAllBytes(source), Charsets.UTF_8))
