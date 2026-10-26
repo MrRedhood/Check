@@ -1091,6 +1091,7 @@ internal fun WorkspaceBrowserPanel(
                     codeCompletionPrefixRange(
                         completionValueAtRender.text,
                         completionValueAtRender.selection.end,
+                        openedFile.orEmpty(),
                     )
                 } else {
                     null
@@ -1113,7 +1114,7 @@ internal fun WorkspaceBrowserPanel(
                         onSelect = { suggestion ->
                             val stableRange = completionPrefixRangeAtRender
                             val completedValue = stableRange?.let {
-                                applyCodeCompletionAtRange(completionValueAtRender, suggestion, it)
+                                applyCodeCompletionAtRange(completionValueAtRender, suggestion, it, openedFile.orEmpty())
                             }
                             if (completedValue != null) {
                                 val accepted = updateEditorText(completedValue.text)

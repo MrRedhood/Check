@@ -102,22 +102,38 @@ private val PROFILE_COMPLETIONS: Map<SyntaxProfile, Set<String>> = mapOf(
     SyntaxProfile.PLAIN to emptySet(),
 )
 
-private fun isCompletionIdentifierPart(character: Char): Boolean =
-    character == '_' || character == '$' || character.isLetterOrDigit()
+private fun supportsHyphenatedIdentifiers(path: String?): Boolean {
+    val profile = path?.let { detectSyntaxLanguage(it)?.profile }
+    return profile == SyntaxProfile.CSS || profile == SyntaxProfile.HTML
+}
 
-internal fun codeCompletionPrefixRange(text: String, caretOffset: Int): TextRange? {
+private fun isCompletionIdentifierPart(character: Char, allowHyphen: Boolean = false): Boolean =
+    character == '_' || character == '$' || character.isLetterOrDigit() ||
+        (allowHyphen && character == '-')
+
+internal fun codeCompletionPrefixRange(
+    text: String,
+    caretOffset: Int,
+    path: String? = null,
+): TextRange? {
     val caret = caretOffset.coerceIn(0, text.length)
-    if (caret == 0 || !isCompletionIdentifierPart(text[caret - 1])) return null
+    val allowHyphen = supportsHyphenatedIdentifiers(path)
+    if (caret == 0 || !isCompletionIdentifierPart(text[caret - 1], allowHyphen)) return null
     var start = caret
-    while (start > 0 && isCompletionIdentifierPart(text[start - 1])) start--
+    while (start > 0 && isCompletionIdentifierPart(text[start - 1], allowHyphen)) start--
     return TextRange(start, caret)
 }
 
 /** Returns the complete identifier surrounding a caret inside an identifier. */
-internal fun codeCompletionIdentifierRange(text: String, caretOffset: Int): TextRange? {
-    val prefixRange = codeCompletionPrefixRange(text, caretOffset) ?: return null
+internal fun codeCompletionIdentifierRange(
+    text: String,
+    caretOffset: Int,
+    path: String? = null,
+): TextRange? {
+    val prefixRange = codeCompletionPrefixRange(text, caretOffset, path) ?: return null
+    val allowHyphen = supportsHyphenatedIdentifiers(path)
     var end = prefixRange.end
-    while (end < text.length && isCompletionIdentifierPart(text[end])) end++
+    while (end < text.length && isCompletionIdentifierPart(text[end], allowHyphen)) end++
     return TextRange(prefixRange.start, end)
 }
 
@@ -133,7 +149,7 @@ internal fun codeCompletionSuggestions(
     if (language.profile == SyntaxProfile.PLAIN || language.profile == SyntaxProfile.MARKDOWN) {
         return emptyList()
     }
-    val prefixRange = codeCompletionPrefixRange(sourceText, caretOffset) ?: return emptyList()
+    val prefixRange = codeCompletionPrefixRange(sourceText, caretOffset, path) ?: return emptyList()
     val prefix = sourceText.substring(prefixRange.start, prefixRange.end)
     if (prefix.length < 2) return emptyList()
 
@@ -166,16 +182,17 @@ internal fun applyCodeCompletionAtRange(
     value: TextFieldValue,
     suggestion: String,
     range: TextRange,
+    path: String? = null,
 ): TextFieldValue? {
     if (range.start < 0 || range.end > value.text.length || range.start >= range.end) return null
-    if (range.start > 0 && isCompletionIdentifierPart(value.text[range.start - 1])) return null
+    val allowHyphen = supportsHyphenatedIdentifiers(path)
+    if (range.start > 0 && isCompletionIdentifierPart(value.text[range.start - 1], allowHyphen)) return null
     val prefix = value.text.substring(range.start, range.end)
-    if (prefix.any { !isCompletionIdentifierPart(it) }) return null
+    if (prefix.any { !isCompletionIdentifierPart(it, allowHyphen) }) return null
     if (!suggestion.startsWith(prefix, ignoreCase = true)) return null
 
-    // The caret may sit in the middle of a word. Replace the whole identifier,
-    // otherwise characters after the caret would be left behind (for example, "prin|tf").
-    val identifierRange = codeCompletionIdentifierRange(value.text, range.end)
+    // Replace the whole identifier, including hyphenated CSS properties and HTML attributes.
+    val identifierRange = codeCompletionIdentifierRange(value.text, range.end, path)
         ?: TextRange(range.start, range.end)
     if (identifierRange.start != range.start) return null
     val nextText = value.text.replaceRange(identifierRange.start, identifierRange.end, suggestion)

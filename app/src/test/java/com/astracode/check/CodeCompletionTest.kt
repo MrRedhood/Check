@@ -77,6 +77,28 @@ class CodeCompletionTest {
     }
 
     @Test
+    fun cssCompletionSupportsHyphenatedPropertiesAndReplacesTheWholeProperty() {
+        val source = "body { font-size: 12px; }"
+        val caret = source.indexOf("font-size") + "font-si".length
+        val suggestions = codeCompletionSuggestions(source, "styles.css", caret)
+        assertTrue(suggestions.contains("font-size"))
+
+        val prefixRange = codeCompletionPrefixRange(source, caret, "styles.css")!!
+        val completed = applyCodeCompletionAtRange(
+            TextFieldValue(source, selection = TextRange(caret)),
+            "font-size",
+            prefixRange,
+            "styles.css",
+        )
+
+        assertEquals(source, completed?.text)
+        assertEquals(
+            TextRange(source.indexOf("font-size") + "font-size".length),
+            completed?.selection,
+        )
+    }
+
+    @Test
     fun suggestionsFollowChangedPrefixAndCaretPosition() {
         val source = "println()"
         val afterPrin = codeCompletionSuggestions(source, "Main.kt", 4)
