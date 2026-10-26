@@ -815,7 +815,13 @@ internal fun WorkspaceBrowserPanel(
             ) {
                 Icon(Icons.Filled.Menu, contentDescription = "Open workspace tree")
             }
-            Text(if (archivePath == null) "Workspace files" else "ZIP: " + archivePath!!.substringAfterLast("/"), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            Text(
+                if (archivePath == null) "Workspace files" else "ZIP: " + archivePath!!.substringAfterLast("/"),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             if (openedArchiveEntry == null && archivePath == null && !selectionMode) {
                 Box {
                     IconButton(onClick = { createInDirectory = null; showCreateMenu = true }, modifier = Modifier.testTag("workspace-create-menu")) {
