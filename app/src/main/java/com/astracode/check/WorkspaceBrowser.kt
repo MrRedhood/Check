@@ -578,6 +578,7 @@ internal fun WorkspaceBrowserPanel(
                 message = "Save the open file before changing its path: " + failedSave
                 return@launch
             }
+            val linkedPathsSnapshot = syncedPaths
             runCatching {
                 withContext(Dispatchers.IO) {
                     val source = resolveWorkspacePath(root, sourcePath)
@@ -589,7 +590,7 @@ internal fun WorkspaceBrowserPanel(
                     if (entry.isDirectory && destination.path.startsWith(source.path + File.separator)) throw IOException("A folder cannot be moved into itself.")
                     try { Files.move(source.toPath(), destination.toPath(), StandardCopyOption.ATOMIC_MOVE) }
                     catch (_: java.nio.file.AtomicMoveNotSupportedException) { Files.move(source.toPath(), destination.toPath()) }
-                    updateSyncedPathsAfterMove(context, root, externalRoot, syncedPaths, sourcePath, destinationPath)
+                    updateSyncedPathsAfterMove(context, root, externalRoot, linkedPathsSnapshot, sourcePath, destinationPath)
                 }
             }.onSuccess { updatedLinks ->
                 syncedPaths = updatedLinks
@@ -1288,10 +1289,11 @@ internal fun WorkspaceBrowserPanel(
                                     recentTrashIds.asReversed().forEach { trashId ->
                                         runCatching { withContext(Dispatchers.IO) { WorkspaceRecovery.restoreFromTrash(root, trashId) } }
                                             .onSuccess { restoredPath ->
+                                                val linkedPathsSnapshot = syncedPaths
                                                 restored++
                                                 runCatching {
                                                     withContext(Dispatchers.IO) {
-                                                        syncLinkedWorkspacePaths(root, externalRoot, syncedPaths, restoredPath)
+                                                        syncLinkedWorkspacePaths(root, externalRoot, linkedPathsSnapshot, restoredPath)
                                                     }
                                                 }
                                             }
@@ -1339,10 +1341,11 @@ internal fun WorkspaceBrowserPanel(
                                 val item = openedArchiveEntry ?: return@Button
                                 val text = archiveEditorText
                                 scope.launch {
+                                    val linkedPathsSnapshot = syncedPaths
                                     runCatching {
                                         withContext(Dispatchers.IO) {
                                             WorkspaceArchiveBrowser.write(root, zip, item, text.toByteArray(Charsets.UTF_8))
-                                            syncLinkedWorkspacePaths(root, externalRoot, syncedPaths, zip)
+                                            syncLinkedWorkspacePaths(root, externalRoot, linkedPathsSnapshot, zip)
                                         }
                                     }.onSuccess {
                                         archiveSavedText = text
@@ -1369,10 +1372,11 @@ internal fun WorkspaceBrowserPanel(
                                     recentTrashIds.asReversed().forEach { trashId ->
                                         runCatching { withContext(Dispatchers.IO) { WorkspaceRecovery.restoreFromTrash(root, trashId) } }
                                             .onSuccess { restoredPath ->
+                                                val linkedPathsSnapshot = syncedPaths
                                                 restored++
                                                 runCatching {
                                                     withContext(Dispatchers.IO) {
-                                                        syncLinkedWorkspacePaths(root, externalRoot, syncedPaths, restoredPath)
+                                                        syncLinkedWorkspacePaths(root, externalRoot, linkedPathsSnapshot, restoredPath)
                                                     }
                                                 }
                                             }
@@ -1488,10 +1492,11 @@ internal fun WorkspaceBrowserPanel(
                                     recentTrashIds.asReversed().forEach { trashId ->
                                         runCatching { withContext(Dispatchers.IO) { WorkspaceRecovery.restoreFromTrash(root, trashId) } }
                                             .onSuccess { restoredPath ->
+                                                val linkedPathsSnapshot = syncedPaths
                                                 restored++
                                                 runCatching {
                                                     withContext(Dispatchers.IO) {
-                                                        syncLinkedWorkspacePaths(root, externalRoot, syncedPaths, restoredPath)
+                                                        syncLinkedWorkspacePaths(root, externalRoot, linkedPathsSnapshot, restoredPath)
                                                     }
                                                 }
                                             }
@@ -1596,10 +1601,11 @@ internal fun WorkspaceBrowserPanel(
                                     recentTrashIds.asReversed().forEach { trashId ->
                                         runCatching { withContext(Dispatchers.IO) { WorkspaceRecovery.restoreFromTrash(root, trashId) } }
                                             .onSuccess { restoredPath ->
+                                                val linkedPathsSnapshot = syncedPaths
                                                 restored++
                                                 runCatching {
                                                     withContext(Dispatchers.IO) {
-                                                        syncLinkedWorkspacePaths(root, externalRoot, syncedPaths, restoredPath)
+                                                        syncLinkedWorkspacePaths(root, externalRoot, linkedPathsSnapshot, restoredPath)
                                                     }
                                                 }
                                             }
@@ -1798,6 +1804,7 @@ internal fun WorkspaceBrowserPanel(
                         val action = archiveOperationKind.orEmpty()
                         val selectedPathsNow = selectedPaths.toList()
                         scope.launch {
+                            val linkedPathsSnapshot = syncedPaths
                             runCatching {
                                 withContext(Dispatchers.IO) {
                                     when (action) {
@@ -1818,7 +1825,7 @@ internal fun WorkspaceBrowserPanel(
                                         "delete-selected" -> WorkspaceArchiveBrowser.deleteMultiple(root, zip, selectedPathsNow)
                                         else -> throw IOException("Unknown ZIP action.")
                                     }
-                                    syncLinkedWorkspacePaths(root, externalRoot, syncedPaths, zip)
+                                    syncLinkedWorkspacePaths(root, externalRoot, linkedPathsSnapshot, zip)
                                 }
                             }.onSuccess {
                                 archiveOperationEntry = null
@@ -2278,12 +2285,13 @@ internal fun WorkspaceBrowserPanel(
                             val name = pathPickerFolderName.trim()
                             if (!isSimpleWorkspaceName(name)) message = "Enter a valid folder name without path separators."
                             else scope.launch {
+                                val linkedPathsSnapshot = syncedPaths
                                 runCatching {
                                     withContext(Dispatchers.IO) {
                                         val folder = resolveWorkspacePath(root, name)
                                         if (folder.exists()) throw IOException("A file or folder with that name already exists at the workspace root.")
                                         if (!folder.mkdir()) throw IOException("Could not create the destination folder.")
-                                        syncLinkedWorkspacePaths(root, externalRoot, syncedPaths, name)
+                                        syncLinkedWorkspacePaths(root, externalRoot, linkedPathsSnapshot, name)
                                         name
                                     }
                                 }.onSuccess { destination ->
@@ -2311,10 +2319,11 @@ internal fun WorkspaceBrowserPanel(
             confirmButton = {
                 TextButton(onClick = {
                     scope.launch {
+                        val linkedPathsSnapshot = syncedPaths
                         val result = runCatching {
                             withContext(Dispatchers.IO) {
                                 val trash = WorkspaceRecovery.moveToTrash(root, entry.path)
-                                val updated = updateSyncedPathsAfterDelete(context, root, externalRoot, syncedPaths, entry.path)
+                                val updated = updateSyncedPathsAfterDelete(context, root, externalRoot, linkedPathsSnapshot, entry.path)
                                 trash.id to updated
                             }
                         }
@@ -2359,6 +2368,7 @@ internal fun WorkspaceBrowserPanel(
                         } else {
                             val destinationPath = joinWorkspacePath(creationBaseDirectory, normalizedName)
                             scope.launch {
+                                val linkedPathsSnapshot = syncedPaths
                                 val result = runCatching {
                                     withContext(Dispatchers.IO) {
                                         val target = resolveWorkspacePath(root, destinationPath)
@@ -2426,7 +2436,7 @@ internal fun WorkspaceBrowserPanel(
                                         val parent = target.parentFile ?: throw IOException("The destination folder is not available.")
                                         if (!parent.isDirectory) throw IOException("The destination parent is not a folder.")
                                         if (!target.mkdir()) throw IOException("Could not create the folder.")
-                                        syncLinkedWorkspacePaths(root, externalRoot, syncedPaths, destinationPath)
+                                        syncLinkedWorkspacePaths(root, externalRoot, linkedPathsSnapshot, destinationPath)
                                     }
                                 }.onSuccess {
                                     showCreateFolderDialog = false
@@ -2569,6 +2579,7 @@ internal fun WorkspaceBrowserPanel(
                                 }
                             }
                         }
+                        val linkedPathsSnapshot = syncedPaths
                         val result = runCatching {
                             withContext(Dispatchers.IO) {
                                 val source = resolveWorkspacePath(root, entry.path)
@@ -2590,18 +2601,25 @@ internal fun WorkspaceBrowserPanel(
                                     "rename", "move" -> {
                                         try { Files.move(source.toPath(), destination.toPath(), StandardCopyOption.ATOMIC_MOVE) }
                                         catch (_: java.nio.file.AtomicMoveNotSupportedException) { Files.move(source.toPath(), destination.toPath()) }
-                                        updateSyncedPathsAfterMove(context, root, externalRoot, syncedPaths, entry.path, destinationPath).also { syncedPaths = it }
+                                        updateSyncedPathsAfterMove(
+                                            context, root, externalRoot, linkedPathsSnapshot, entry.path, destinationPath,
+                                        )
                                     }
-                                    "copy" -> copyWorkspaceEntry(root, entry.path, destinationPath)
+                                    "copy" -> {
+                                        copyWorkspaceEntry(root, entry.path, destinationPath)
+                                        linkedPathsSnapshot
+                                    }
                                     "extract" -> {
                                         WorkspaceArchive.extractZip(root, entry.path, destinationPath)
-                                        syncLinkedWorkspacePaths(root, externalRoot, syncedPaths, destinationPath)
+                                        syncLinkedWorkspacePaths(root, externalRoot, linkedPathsSnapshot, destinationPath)
+                                        linkedPathsSnapshot
                                     }
                                     else -> throw IOException("Unknown file action.")
                                 }
                             }
                         }
-                        result.onSuccess {
+                        result.onSuccess { updatedLinks ->
+                            if (kind == "rename" || kind == "move") syncedPaths = updatedLinks
                             if (kind == "rename" || kind == "move") {
                                 updateWorkspacePathReferences(entry.path, destinationPathForReferences)
                             }
@@ -2701,10 +2719,11 @@ internal fun WorkspaceBrowserPanel(
                             val completedMoves = mutableListOf<Pair<String, String>>()
                             val removedPaths = mutableListOf<String>()
                             val trashedItems = mutableListOf<WorkspaceTrashItem>()
+                            val linkedPathsSnapshot = syncedPaths
                             val result = runCatching {
                                 withContext(Dispatchers.IO) {
                                     if (paths.isEmpty()) throw IOException("Select at least one item.")
-                                    var links = syncedPaths
+                                    var links = linkedPathsSnapshot
                                     val summary = when (kind) {
                                         "zip" -> {
                                             val zipName = when {
@@ -2818,10 +2837,11 @@ internal fun WorkspaceBrowserPanel(
                 Text("Choose which copy should replace the other. The link is remembered for later app-side edits.")
                 Button(onClick = {
                     scope.launch {
+                        val nextSyncedPaths = syncedPaths + entry.path
                         val result = runCatching {
                             withContext(Dispatchers.IO) {
                                 mirrorWorkspaceEntry(root, externalRoot, entry.path, entry.path)
-                                saveSyncedPaths(context, root, syncedPaths + entry.path)
+                                saveSyncedPaths(context, root, nextSyncedPaths)
                             }
                         }
                         result.onSuccess { syncedPaths = it; syncEntry = null; refreshKey++; message = "Synced app copy to external storage." }
@@ -2830,10 +2850,11 @@ internal fun WorkspaceBrowserPanel(
                 }, modifier = Modifier.fillMaxWidth().testTag("sync-app-to-external")) { Text("App → external storage") }
                 Button(onClick = {
                     scope.launch {
+                        val nextSyncedPaths = syncedPaths + entry.path
                         val result = runCatching {
                             withContext(Dispatchers.IO) {
                                 mirrorWorkspaceEntry(externalRoot, root, entry.path, entry.path)
-                                saveSyncedPaths(context, root, syncedPaths + entry.path)
+                                saveSyncedPaths(context, root, nextSyncedPaths)
                             }
                         }
                         result.onSuccess { syncedPaths = it; syncEntry = null; refreshKey++; message = "Synced external storage to app copy." }
