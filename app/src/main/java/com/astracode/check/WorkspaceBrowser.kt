@@ -44,6 +44,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -72,6 +74,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
@@ -191,6 +194,7 @@ internal fun WorkspaceBrowserPanel(
     val editorText = activeEditorTab?.text.orEmpty()
     val savedText = activeEditorTab?.savedText.orEmpty()
     val loading = activeEditorTab?.isLoading ?: false
+    val editorPath = openedFile.orEmpty()
     val creationBaseDirectory = createInDirectory ?: (openedFile?.substringBeforeLast('/', "") ?: currentDirectory)
     var editorFieldValue by remember(openedFile) { mutableStateOf(TextFieldValue(editorText)) }
     val useVirtualizedEditor = shouldUseVirtualizedEditor(editorFieldValue.text.length)
@@ -289,24 +293,46 @@ internal fun WorkspaceBrowserPanel(
                 return Result.success(WorkspaceEditorSaveOutcome(linkedSyncSucceeded = true))
             }
 
-            val writeCompleted = try {
-                withTimeoutOrNull(EDITOR_SAVE_TIMEOUT_MS) {
+            // Capture Compose state on the main dispatcher before entering the IO context.
+            val linkedPathsSnapshot = syncedPaths
+            try {
+                val writeCompleted = withTimeoutOrNull(EDITOR_SAVE_TIMEOUT_MS) {
                     withContext(Dispatchers.IO) {
                         writeWorkspaceText(root, path, contentToSave)
                     }
+                }
+                if (writeCompleted == null) {
+                    return Result.failure(
+                        IOException("Saving timed out after 15 seconds. Your draft remains open; try saving again."),
+                    )
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
                 return Result.failure(error)
-            } ?: return Result.failure(
-                IOException("Saving timed out after 15 seconds. Your draft remains open; try saving again."),
-            )
+            }
+
+            // Mark the local write as saved before waiting for slower linked-workspace sync.
+            val stillOpen = editorTabs.firstOrNull { it.path == path }
+            if (stillOpen != null) {
+                editorTabs = editorTabs.map { tab ->
+                    if (tab.path == path) tab.copy(savedText = contentToSave) else tab
+                }
+                val latestText = editorTabs.firstOrNull { it.path == path }?.text
+                if (latestText == contentToSave) {
+                    clearEditorAutosaveSchedule(path)
+                } else {
+                    val now = SystemClock.elapsedRealtime()
+                    firstDirtyAt = firstDirtyAt + (path to now)
+                    lastEditedAt = lastEditedAt + (path to now)
+                    autosaveRetryAt = autosaveRetryAt - path
+                }
+            }
 
             val syncResult = try {
                 val syncCompleted = withTimeoutOrNull(EDITOR_SAVE_TIMEOUT_MS) {
                     withContext(Dispatchers.IO) {
-                        syncLinkedWorkspacePaths(root, externalRoot, syncedPaths, path)
+                        syncLinkedWorkspacePaths(root, externalRoot, linkedPathsSnapshot, path)
                     }
                 }
                 if (syncCompleted == null) {
@@ -320,23 +346,6 @@ internal fun WorkspaceBrowserPanel(
                 Result.failure(error)
             }
 
-            val stillOpen = editorTabs.firstOrNull { it.path == path }
-            if (stillOpen != null) {
-                editorTabs = editorTabs.map { tab ->
-                    if (tab.path == path) tab.copy(savedText = contentToSave) else tab
-                }
-                val latestText = editorTabs.firstOrNull { it.path == path }?.text
-                if (latestText == contentToSave) {
-                    clearEditorAutosaveSchedule(path)
-                } else {
-                    // Edits made while the disk write was running start a fresh bounded save window.
-                    val now = SystemClock.elapsedRealtime()
-                    firstDirtyAt = firstDirtyAt + (path to now)
-                    lastEditedAt = lastEditedAt + (path to now)
-                    autosaveRetryAt = autosaveRetryAt - path
-                }
-            }
-
             return Result.success(
                 WorkspaceEditorSaveOutcome(
                     linkedSyncSucceeded = syncResult.isSuccess,
@@ -348,10 +357,9 @@ internal fun WorkspaceBrowserPanel(
             saveMutex.unlock()
         }
     }
-
-    fun updateEditorText(newText: String): Boolean {
+    fun updateEditorText(path: String, newText: String): Boolean {
         if (replacingOldestTab) return false
-        val path = openedFile ?: return false
+        if (path != openedFile) return false
         val currentTab = editorTabs.firstOrNull { it.path == path } ?: return false
         if (newText == currentTab.text) return true
 
@@ -376,19 +384,11 @@ internal fun WorkspaceBrowserPanel(
         }
         return true
     }
-
     fun activateEditorFile(path: String) {
         if (replacingOldestTab) return
         val existing = editorTabs.firstOrNull { it.path == path }
         if (existing != null) {
             currentDirectory = path.substringBeforeLast('/', "")
-            // Switch the text and selection synchronously with the active tab. The editor's
-            // keyed state also resets on openedFile; this explicit assignment avoids one-frame
-            // stale content when quickly switching between dirty drafts.
-            editorFieldValue = TextFieldValue(
-                existing.text,
-                selection = TextRange(existing.text.length),
-            )
             selectedFindRange = null
             openedFile = path
             return
@@ -482,15 +482,28 @@ internal fun WorkspaceBrowserPanel(
     }
 
     fun requestCloseEditorTab(path: String) {
-        val tab = editorTabs.firstOrNull { it.path == path } ?: return
-        if (tab.text != tab.savedText) {
-            pendingCloseTabPath = path
-            showDiscardTabDialog = true
-        } else {
-            removeEditorTab(path)
+        if (editorTabs.none { it.path == path }) return
+        scope.launch {
+            fun tabIsDirty(): Boolean =
+                editorTabs.firstOrNull { it.path == path }?.let { it.text != it.savedText } ?: false
+
+            // Wait until a running local write has committed savedText before deciding whether
+            // closing this tab would discard a draft that's already on disk.
+            withTimeoutOrNull(2 * EDITOR_SAVE_TIMEOUT_MS + 1_000L) {
+                snapshotFlow {
+                    (savingEditorPath != null || autosaveInProgress) && tabIsDirty()
+                }.first { inFlightAndDirty -> !inFlightAndDirty }
+            }
+
+            val tab = editorTabs.firstOrNull { it.path == path } ?: return@launch
+            if (tab.text != tab.savedText) {
+                pendingCloseTabPath = path
+                showDiscardTabDialog = true
+            } else {
+                removeEditorTab(path)
+            }
         }
     }
-
     fun requestCloseWorkspace() {
         if (editorTabs.any { it.text != it.savedText }) {
             showDiscardWorkspaceDialog = true
@@ -1001,7 +1014,7 @@ internal fun WorkspaceBrowserPanel(
                                 val (updated, didReplace) = replaceOneMatch(valueToReplace, findQuery, replacementText)
                                 selectedFindRange = null
                                 if (didReplace) {
-                                    if (updateEditorText(updated.text)) {
+                                    if (updateEditorText(editorPath, updated.text)) {
                                         editorFieldValue = updated
                                         editorFocusRequester.requestFocus()
                                         message = "Replaced one occurrence."
@@ -1024,7 +1037,7 @@ internal fun WorkspaceBrowserPanel(
                                 val (updated, count) = replaceAllMatches(editorFieldValue, findQuery, replacementText)
                                 selectedFindRange = null
                                 if (count > 0) {
-                                    if (updateEditorText(updated.text)) {
+                                    if (updateEditorText(editorPath, updated.text)) {
                                         editorFieldValue = updated
                                         message = "Replaced ${count} occurrence(s)."
                                     } else {
@@ -1117,7 +1130,7 @@ internal fun WorkspaceBrowserPanel(
                                 applyCodeCompletionAtRange(completionValueAtRender, suggestion, it, openedFile.orEmpty())
                             }
                             if (completedValue != null) {
-                                val accepted = updateEditorText(completedValue.text)
+                                val accepted = updateEditorText(editorPath, completedValue.text)
                                 if (accepted) {
                                     editorFieldValue = completedValue
                                     selectedFindRange = null
@@ -1129,14 +1142,16 @@ internal fun WorkspaceBrowserPanel(
                             }
                         },
                     )
+                    key(editorPath) {
                     Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 if (useVirtualizedEditor) {
                     VirtualizedCodeEditor(
                         value = editorFieldValue,
                         path = openedFile.orEmpty(),
                         onValueChange = { newValue ->
+                            if (editorPath != openedFile) return@VirtualizedCodeEditor false
                             if (newValue.text != editorFieldValue.text) selectedFindRange = null
-                            val accepted = updateEditorText(newValue.text)
+                            val accepted = updateEditorText(editorPath, newValue.text)
                             if (accepted) {
                                 editorFieldValue = newValue
                             } else {
@@ -1165,8 +1180,9 @@ internal fun WorkspaceBrowserPanel(
                 BasicTextField(
                     value = editorFieldValue,
                     onValueChange = { newValue ->
+                        if (editorPath != openedFile) return@BasicTextField
                         if (newValue.text != editorFieldValue.text) selectedFindRange = null
-                        val accepted = updateEditorText(newValue.text)
+                        val accepted = updateEditorText(editorPath, newValue.text)
                         if (accepted) {
                             editorFieldValue = newValue
                         } else {
@@ -1217,7 +1233,7 @@ internal fun WorkspaceBrowserPanel(
                         outcome.clipboardText?.let { clipboardManager.setText(AnnotatedString(it)) }
                         var accepted = true
                         if (outcome.value.text != currentValue.text) {
-                            accepted = updateEditorText(outcome.value.text)
+                            accepted = updateEditorText(editorPath, outcome.value.text)
                             if (accepted) {
                                 editorFieldValue = outcome.value
                                 selectedFindRange = null
@@ -1230,6 +1246,7 @@ internal fun WorkspaceBrowserPanel(
                     },
                 )
                     }
+                }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
