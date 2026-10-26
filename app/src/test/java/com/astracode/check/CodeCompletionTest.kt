@@ -55,6 +55,28 @@ class CodeCompletionTest {
     }
 
     @Test
+    fun completionAtMiddleOfIdentifierReplacesTheWholeIdentifier() {
+        val source = "val result = printf + 1"
+        val caret = source.indexOf("pri") + "pri".length
+        val prefixRange = codeCompletionPrefixRange(source, caret)!!
+
+        val completed = applyCodeCompletionAtRange(
+            TextFieldValue(source, selection = TextRange(caret)),
+            "println",
+            prefixRange,
+        )
+
+        assertEquals("val result = println + 1", completed?.text)
+        assertEquals(TextRange(source.indexOf("pri") + "println".length), completed?.selection)
+    }
+
+    @Test
+    fun completionRejectsARangeStartingInsideAnotherIdentifier() {
+        val value = TextFieldValue("xpri", selection = TextRange(4))
+        assertEquals(null, applyCodeCompletionAtRange(value, "println", TextRange(1, 4)))
+    }
+
+    @Test
     fun suggestionsFollowChangedPrefixAndCaretPosition() {
         val source = "println()"
         val afterPrin = codeCompletionSuggestions(source, "Main.kt", 4)

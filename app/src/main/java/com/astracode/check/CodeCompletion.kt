@@ -22,7 +22,7 @@ import java.util.Locale
 
 private const val COMPLETION_SCAN_RADIUS = 32 * 1024
 private const val DEFAULT_COMPLETION_LIMIT = 8
-private val COMPLETION_IDENTIFIER = Regex("""[A-Za-z_$][A-Za-z0-9_$]*""")
+private val COMPLETION_IDENTIFIER = Regex("""[\p{L}_$][\p{L}\p{N}_$]*""")
 
 /*
  * The existing syntax detector groups its 150+ file formats into lexer profiles.
@@ -113,6 +113,14 @@ internal fun codeCompletionPrefixRange(text: String, caretOffset: Int): TextRang
     return TextRange(start, caret)
 }
 
+/** Returns the complete identifier surrounding a caret inside an identifier. */
+internal fun codeCompletionIdentifierRange(text: String, caretOffset: Int): TextRange? {
+    val prefixRange = codeCompletionPrefixRange(text, caretOffset) ?: return null
+    var end = prefixRange.end
+    while (end < text.length && isCompletionIdentifierPart(text[end])) end++
+    return TextRange(prefixRange.start, end)
+}
+
 /** Returns offline, language-aware suggestions for the identifier immediately before the caret. */
 internal fun codeCompletionSuggestions(
     sourceText: String,
@@ -160,10 +168,18 @@ internal fun applyCodeCompletionAtRange(
     range: TextRange,
 ): TextFieldValue? {
     if (range.start < 0 || range.end > value.text.length || range.start >= range.end) return null
+    if (range.start > 0 && isCompletionIdentifierPart(value.text[range.start - 1])) return null
     val prefix = value.text.substring(range.start, range.end)
+    if (prefix.any { !isCompletionIdentifierPart(it) }) return null
     if (!suggestion.startsWith(prefix, ignoreCase = true)) return null
-    val nextText = value.text.replaceRange(range.start, range.end, suggestion)
-    return TextFieldValue(nextText, selection = TextRange(range.start + suggestion.length))
+
+    // The caret may sit in the middle of a word. Replace the whole identifier,
+    // otherwise characters after the caret would be left behind (for example, "prin|tf").
+    val identifierRange = codeCompletionIdentifierRange(value.text, range.end)
+        ?: TextRange(range.start, range.end)
+    if (identifierRange.start != range.start) return null
+    val nextText = value.text.replaceRange(identifierRange.start, identifierRange.end, suggestion)
+    return TextFieldValue(nextText, selection = TextRange(identifierRange.start + suggestion.length))
 }
 
 /** Replaces only the identifier prefix; the caller still submits the edit through its normal gate. */

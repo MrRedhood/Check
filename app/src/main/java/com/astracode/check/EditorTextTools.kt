@@ -246,6 +246,35 @@ internal fun replaceOneMatch(
     return TextFieldValue(newText, selection = TextRange(start + replacement.length)) to true
 }
 
+private fun mapOffsetThroughReplacements(
+    text: String,
+    query: String,
+    replacement: String,
+    offset: Int,
+): Int {
+    val cursor = offset.coerceIn(0, text.length)
+    var sourceOffset = 0
+    var resultOffset = 0
+
+    while (sourceOffset <= text.length) {
+        val matchStart = text.indexOf(query, sourceOffset)
+        if (matchStart < 0 || matchStart >= cursor) {
+            return resultOffset + cursor - sourceOffset
+        }
+
+        resultOffset += matchStart - sourceOffset
+        val matchEnd = matchStart + query.length
+        if (cursor < matchEnd) {
+            // Keep the relative caret position when possible; clamp it if replacement is shorter.
+            return resultOffset + minOf(cursor - matchStart, replacement.length)
+        }
+
+        resultOffset += replacement.length
+        sourceOffset = matchEnd
+    }
+    return resultOffset
+}
+
 internal fun replaceAllMatches(
     value: TextFieldValue,
     query: String,
@@ -254,10 +283,12 @@ internal fun replaceAllMatches(
     val count = countMatches(value.text, query)
     if (count == 0) return value to 0
     val cursor = value.selection.end.coerceIn(0, value.text.length)
-    val matchesBeforeCursor = countMatches(value.text.substring(0, cursor), query)
     val newText = value.text.replace(query, replacement)
-    val adjustedCursor = (
-        cursor + matchesBeforeCursor * (replacement.length - query.length)
+    val adjustedCursor = mapOffsetThroughReplacements(
+        value.text,
+        query,
+        replacement,
+        cursor,
     ).coerceIn(0, newText.length)
     return TextFieldValue(newText, selection = TextRange(adjustedCursor)) to count
 }

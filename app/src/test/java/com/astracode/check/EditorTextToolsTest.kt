@@ -103,6 +103,19 @@ class EditorTextToolsTest {
     }
 
     @Test
+    fun replaceAllKeepsCaretInsideShortenedReplacementAtItsEnd() {
+        val source = "left target right"
+        val matchStart = source.indexOf("target")
+        val value = TextFieldValue(source, selection = TextRange(matchStart + 5))
+
+        val (updated, count) = replaceAllMatches(value, "target", "x")
+
+        assertEquals(1, count)
+        assertEquals("left x right", updated.text)
+        assertEquals(TextRange(matchStart + 1), updated.selection)
+    }
+
+    @Test
     fun emptySearchNeverMatchesOrChangesText() {
         val value = TextFieldValue("keep me")
         assertEquals(0, countMatches(value.text, ""))
