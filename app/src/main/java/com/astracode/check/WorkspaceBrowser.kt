@@ -1463,7 +1463,7 @@ internal fun WorkspaceBrowserPanel(
             }
             if (selectionMode) {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(selectedPaths.size.toString() + " selected", modifier = Modifier.weight(1f))
+                    Text(selectedPaths.size.toString() + " selected", modifier = Modifier.weight(1f).testTag("workspace-selection-count"))
                     TextButton(
                         onClick = {
                             archiveOperationKind = "zip"
