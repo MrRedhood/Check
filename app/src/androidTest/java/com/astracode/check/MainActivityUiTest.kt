@@ -1205,7 +1205,6 @@ class MainActivityUiTest {
         waitForUiStage("symbol description is displayed") {
             runCatching { composeRule.onNodeWithTag("language-reference-dialog").assertIsDisplayed() }.isSuccess
         }
-        composeRule.onNodeWithTag("language-reference-dialog").printToLog("LanguageReferenceDialog")
         composeRule.onNodeWithTag("language-reference-symbol").assertTextContains("println")
         composeRule.onNodeWithTag("language-reference-category").assertTextContains("Built-in function")
         composeRule.onNodeWithTag("language-reference-description").assertTextContains("standard output")
