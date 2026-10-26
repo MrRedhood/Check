@@ -385,7 +385,6 @@ internal fun WorkspaceBrowserPanel(
         return true
     }
     fun activateEditorFile(path: String) {
-        if (replacingOldestTab) return
         val existing = editorTabs.firstOrNull { it.path == path }
         if (existing != null) {
             currentDirectory = path.substringBeforeLast('/', "")
@@ -393,6 +392,7 @@ internal fun WorkspaceBrowserPanel(
             openedFile = path
             return
         }
+        if (replacingOldestTab) return
 
         val estimatedBytes = runCatching {
             Files.size(resolveWorkspacePath(root, path).toPath())
@@ -915,19 +915,22 @@ internal fun WorkspaceBrowserPanel(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 editorTabs.forEach { tab ->
-                    val tagSuffix = tab.path.replace("/", "__")
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(
-                            onClick = { activateEditorFile(tab.path) },
-                            modifier = Modifier.testTag("workspace-tab-$tagSuffix"),
-                        ) {
-                            val dirtyMarker = if (tab.text != tab.savedText) " •" else ""
-                            Text(tab.path.substringAfterLast('/') + dirtyMarker, maxLines = 1)
+                    val tabPath = tab.path
+                    val tagSuffix = tabPath.replace("/", "__")
+                    key(tabPath) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            TextButton(
+                                onClick = { activateEditorFile(tabPath) },
+                                modifier = Modifier.testTag("workspace-tab-$tagSuffix"),
+                            ) {
+                                val dirtyMarker = if (tab.text != tab.savedText) " •" else ""
+                                Text(tabPath.substringAfterLast('/') + dirtyMarker, maxLines = 1)
+                            }
+                            TextButton(
+                                onClick = { requestCloseEditorTab(tabPath) },
+                                modifier = Modifier.testTag("workspace-tab-close-$tagSuffix"),
+                            ) { Text("×") }
                         }
-                        TextButton(
-                            onClick = { requestCloseEditorTab(tab.path) },
-                            modifier = Modifier.testTag("workspace-tab-close-$tagSuffix"),
-                        ) { Text("×") }
                     }
                 }
             }
