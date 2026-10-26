@@ -870,7 +870,7 @@ internal fun WorkspaceBrowserPanel(
         }
         if (selectionMode && openedFile == null && openedArchiveEntry == null && archivePath == null) {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("${selectedPaths.size} selected", modifier = Modifier.weight(1f))
+                Text("${selectedPaths.size} selected", modifier = Modifier.weight(1f).testTag("workspace-selection-count"))
                 TextButton(
                     onClick = { bulkActionKind = "zip"; bulkInput = "archive.zip" },
                     enabled = selectedPaths.isNotEmpty(),
@@ -1463,7 +1463,7 @@ internal fun WorkspaceBrowserPanel(
             }
             if (selectionMode) {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(selectedPaths.size.toString() + " selected", modifier = Modifier.weight(1f).testTag("workspace-selection-count"))
+                    Text(selectedPaths.size.toString() + " selected", modifier = Modifier.weight(1f))
                     TextButton(
                         onClick = {
                             archiveOperationKind = "zip"
