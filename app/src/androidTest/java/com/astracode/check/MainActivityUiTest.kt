@@ -988,12 +988,47 @@ class MainActivityUiTest {
         }
     }
 
+    private fun currentBulkZipFilesystemDiagnosticSnapshot(): String {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val externalRoot = File(context.filesDir, "external-workspace")
+
+        fun describe(root: File, relativePath: String): String {
+            val file = File(root, relativePath)
+            val children = if (file.isDirectory) {
+                file.list()?.sorted()?.joinToString(",") ?: "<unreadable>"
+            } else {
+                "-"
+            }
+            return "$relativePath(exists=${file.exists()},file=${file.isFile},dir=${file.isDirectory},bytes=${file.length()},children=[$children])"
+        }
+
+        val details = listOf(
+            describe(workspaceRoot, "app"),
+            describe(workspaceRoot, "app/bundle.zip"),
+            describe(workspaceRoot, "app/build.gradle.kts"),
+            describe(workspaceRoot, "app/src"),
+            describe(externalRoot, "app"),
+            describe(externalRoot, "app/bundle.zip"),
+            describe(externalRoot, "app/build.gradle.kts"),
+            describe(externalRoot, "app/src"),
+            describe(externalRoot, "app/src/.env"),
+        )
+        val links = context.getSharedPreferences("check_workspace_sync", android.content.Context.MODE_PRIVATE)
+            .all.toSortedMap().toString().take(800)
+        return " [bulk ZIP filesystem: ${details.joinToString("; ")}; syncPrefs=$links]"
+    }
+
     private fun waitForUiStage(stage: String, timeoutMillis: Long = 5_000, condition: () -> Boolean) {
         try {
             composeRule.waitUntil(timeoutMillis = timeoutMillis, condition = condition)
         } catch (error: Throwable) {
+            val filesystemSnapshot = if (stage == "bulk ZIP creation and linked copy") {
+                currentBulkZipFilesystemDiagnosticSnapshot()
+            } else {
+                ""
+            }
             throw AssertionError(
-                "Timed out waiting for UI stage: " + stage + currentUiDiagnosticSnapshot(),
+                "Timed out waiting for UI stage: " + stage + currentUiDiagnosticSnapshot() + filesystemSnapshot,
                 error,
             )
         }
