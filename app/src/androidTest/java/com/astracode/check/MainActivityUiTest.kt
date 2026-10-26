@@ -1205,6 +1205,13 @@ class MainActivityUiTest {
         waitForUiStage("symbol description is displayed") {
             runCatching { composeRule.onNodeWithTag("language-reference-dialog").assertIsDisplayed() }.isSuccess
         }
+        val categoryText = composeRule.onNodeWithTag("language-reference-category", useUnmergedTree = true)
+            .fetchSemanticsNode().config[SemanticsProperties.Text].joinToString(" ") { it.text }
+        val descriptionText = composeRule.onNodeWithTag("language-reference-description", useUnmergedTree = true)
+            .fetchSemanticsNode().config[SemanticsProperties.Text].joinToString(" ") { it.text }
+        println("SYMBOL_REFERENCE_UI_CATEGORY=$categoryText")
+        println("SYMBOL_REFERENCE_UI_DESCRIPTION=$descriptionText")
+        println("SYMBOL_REFERENCE_EXPECTED_PATH_RESULT=" + describeLanguageSymbolAt("println", "SymbolReference.kt", 7))
         composeRule.onNodeWithTag("language-reference-symbol", useUnmergedTree = true).assertTextContains("println")
         composeRule.onNodeWithTag("language-reference-category", useUnmergedTree = true).assertTextContains("Built-in function")
         composeRule.onNodeWithTag("language-reference-description", useUnmergedTree = true).assertTextContains("standard output")
