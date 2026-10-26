@@ -271,6 +271,7 @@ private fun WorkspaceTreeRow(
     } else {
         Color.Transparent
     }
+    val connectorColor = MaterialTheme.colorScheme.outlineVariant
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -296,14 +297,14 @@ private fun WorkspaceTreeRow(
                     val x = (index + 0.5f) * step
                     val endY = if (hasNext || index < connectorHasNext.lastIndex) size.height else centerY
                     drawLine(
-                        color = MaterialTheme.colorScheme.outlineVariant,
+                        color = connectorColor,
                         start = Offset(x, 0f),
                         end = Offset(x, endY),
                         strokeWidth = stroke,
                     )
                 }
                 drawLine(
-                    color = MaterialTheme.colorScheme.outlineVariant,
+                    color = connectorColor,
                     start = Offset((depth - 0.5f) * step, centerY),
                     end = Offset(depth * step, centerY),
                     strokeWidth = stroke,
