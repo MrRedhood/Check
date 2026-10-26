@@ -287,19 +287,19 @@ class MainActivityUiTest {
             "external-workspace",
         )
         composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
-        composeRule.waitUntil(timeoutMillis = 5_000) {
+        waitForUiStage("workspace app entry before sync") {
             runCatching { composeRule.onNodeWithTag("workspace-entry-app").assertIsDisplayed() }.isSuccess
         }
 
         composeRule.onNodeWithTag("workspace-entry-app").performTouchInput { longClick() }
         composeRule.onNodeWithTag("workspace-action-sync").performClick()
         composeRule.onNodeWithTag("sync-app-to-external").performClick()
-        composeRule.waitUntil(timeoutMillis = 5_000) {
+        waitForUiStage("external .env after sync", timeoutMillis = 5_000) {
             File(externalRoot, "app/src/.env").takeIf { it.exists() }?.readText() == "TOKEN=original"
         }
 
         composeRule.onNodeWithTag("workspace-entry-app").performClick()
-        composeRule.waitUntil(timeoutMillis = 5_000) {
+        waitForUiStage("build file inside app folder") {
             runCatching { composeRule.onNodeWithTag("workspace-entry-build.gradle.kts").assertIsDisplayed() }.isSuccess
         }
 
@@ -310,14 +310,14 @@ class MainActivityUiTest {
         composeRule.onNodeWithTag("workspace-bulk-input").performTextReplacement("bundle.zip")
         composeRule.onNodeWithTag("confirm-workspace-bulk-action").performClick()
 
-        composeRule.waitUntil(timeoutMillis = 5_000) {
+        waitForUiStage("bulk ZIP creation and linked copy", timeoutMillis = 5_000) {
             File(workspaceRoot, "app/bundle.zip").isFile &&
                 File(externalRoot, "app/bundle.zip").isFile &&
                 !File(workspaceRoot, "app/build.gradle.kts").exists() &&
                 !File(workspaceRoot, "app/src").exists()
         }
 
-        composeRule.waitUntil(timeoutMillis = 5_000) {
+        waitForUiStage("bundle ZIP entry after bulk action") {
             runCatching { composeRule.onNodeWithTag("workspace-entry-bundle.zip").assertIsDisplayed() }.isSuccess
         }
         composeRule.onNodeWithTag("workspace-entry-bundle.zip").performClick()
@@ -325,7 +325,7 @@ class MainActivityUiTest {
         composeRule.onNodeWithTag("workspace-operation-input").performTextReplacement("app/restored")
         composeRule.onNodeWithTag("confirm-workspace-operation").performClick()
 
-        composeRule.waitUntil(timeoutMillis = 5_000) {
+        waitForUiStage("restored workspace files and linked copy", timeoutMillis = 5_000) {
             File(workspaceRoot, "app/restored/build.gradle.kts").isFile &&
                 File(workspaceRoot, "app/restored/src/Main.kt").isFile &&
                 File(externalRoot, "app/restored/src/Main.kt").isFile
