@@ -2811,9 +2811,7 @@ internal fun WorkspaceBrowserPanel(
                                             val archivePath = joinWorkspacePath(currentDirectory, zipName)
                                             WorkspaceArchive.moveToZip(root, paths, archivePath, currentDirectory)
                                             removedPaths += paths
-                                            paths.sortedByDescending { it.count { ch -> ch == '/' } }.forEach { path ->
-                                                links = updateSyncedPathsAfterDelete(context, root, externalRoot, links, path)
-                                            }
+                                            links = updateSyncedPathsAfterDeletes(context, root, externalRoot, links, paths)
                                             syncLinkedWorkspacePaths(root, externalRoot, links, archivePath)
                                             "Moved selected items into $zipName"
                                         }
@@ -3081,6 +3079,30 @@ private fun syncLinkedWorkspacePaths(root: File, externalRoot: File, links: Set<
         else if (external.exists() && !external.deleteRecursively()) throw IOException("Could not propagate deletion of " + linkedPath)
     }
 }
+private fun updateSyncedPathsAfterDeletes(
+    context: android.content.Context,
+    root: File,
+    externalRoot: File,
+    links: Set<String>,
+    deletedPaths: List<String>,
+): Set<String> {
+    val retained = linkedSetOf<String>()
+    links.forEach { linkedPath ->
+        val linkIsBeingDeleted = deletedPaths.any { deletedPath ->
+            linkedPath == deletedPath || linkedPath.startsWith(deletedPath + "/")
+        }
+        if (linkIsBeingDeleted) {
+            val remote = resolveWorkspacePath(externalRoot, linkedPath)
+            if (remote.exists() && !remote.deleteRecursively()) {
+                throw IOException("Could not delete synced item: " + linkedPath)
+            }
+        } else {
+            retained += linkedPath
+        }
+    }
+    return saveSyncedPaths(context, root, retained)
+}
+
 private fun updateSyncedPathsAfterDelete(
     context: android.content.Context, root: File, externalRoot: File, links: Set<String>, deletedPath: String,
 ): Set<String> {
