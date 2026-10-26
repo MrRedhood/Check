@@ -1695,8 +1695,9 @@ internal fun WorkspaceBrowserPanel(
                         if (selectionMode) {
                             Checkbox(
                                 checked = entry.path in selectedPaths,
-                                onCheckedChange = { checked ->
-                                    selectedPaths = if (checked) selectedPaths + entry.path else selectedPaths - entry.path
+                                onCheckedChange = {
+                                    selectedPaths = if (entry.path in selectedPaths) selectedPaths - entry.path
+                                        else selectedPaths + entry.path
                                 },
                                 modifier = Modifier.testTag("workspace-select-" + entry.name),
                             )
