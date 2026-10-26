@@ -1186,4 +1186,28 @@ class MainActivityUiTest {
         composeRule.onNodeWithText("Copied AstraCode Context Capsule to clipboard.").assertIsDisplayed()
     }
 
+    @Test
+    fun editorToolsDescribeKotlinSymbolsOffline() {
+        val sample = File(workspaceRoot, "SymbolReference.kt")
+        sample.writeText("")
+        composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
+        waitForUiStage("symbol reference sample appears") {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-SymbolReference.kt").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-entry-SymbolReference.kt").performClick()
+        waitForUiStage("symbol reference editor opens") {
+            runCatching { composeRule.onNodeWithTag("workspace-editor-input").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-editor-input").performTextInput("println")
+        composeRule.onNodeWithTag("editor-tools-open").performClick()
+        composeRule.onNodeWithTag("editor-tools-group-astracode").performClick()
+        composeRule.onNodeWithTag("editor-tool-describe_symbol").performClick()
+        waitForUiStage("symbol description is displayed") {
+            runCatching { composeRule.onNodeWithTag("language-reference-dialog").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("language-reference-symbol").assertTextContains("println")
+        composeRule.onNodeWithTag("language-reference-description").assertTextContains("standard output")
+        composeRule.onNodeWithTag("language-reference-close").performClick()
+    }
+
 }

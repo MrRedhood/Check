@@ -570,6 +570,7 @@ internal fun applyEditorTool(action: EditorToolAction, value: TextFieldValue, pa
                 "Selection Pulse: " + selected.length + " chars · " + words + " words · " + lines + " line(s) · " + nonEmptyLines + " non-empty.",
             )
         }
+        EditorToolAction.DESCRIBE_SYMBOL -> EditorToolOutcome(value, "Opened the symbol reference.")
     }
 }
 

@@ -65,6 +65,7 @@ internal enum class EditorToolAction(
     SELECT_CURRENT_LINE(EditorToolGroup.ASTRACODE, "Select current line", "Select the complete current line without its newline."),
     CONTEXT_CAPSULE(EditorToolGroup.ASTRACODE, "Context Capsule", "Copy code with filename, line numbers, and nearby context for an AI handoff."),
     SELECTION_PULSE(EditorToolGroup.ASTRACODE, "Selection Pulse", "Summarize characters, words, lines, and non-empty lines in the selection."),
+    DESCRIBE_SYMBOL(EditorToolGroup.ASTRACODE, "Describe symbol / syntax", "Explain the token, operator, or declaration at the caret using the detected file syntax."),
 }
 
 @Composable

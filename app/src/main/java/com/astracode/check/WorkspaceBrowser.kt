@@ -215,6 +215,7 @@ internal fun WorkspaceBrowserPanel(
     var findQuery by remember(openedFile) { mutableStateOf("") }
     var replacementText by remember(openedFile) { mutableStateOf("") }
     var selectedFindRange by remember(openedFile) { mutableStateOf<TextRange?>(null) }
+    var languageSymbolReference by remember(openedFile) { mutableStateOf<LanguageSymbolReference?>(null) }
     val editorFocusRequester = remember { FocusRequester() }
     var previousVirtualizedEditorMode by remember(openedFile) { mutableStateOf(useVirtualizedEditor) }
     LaunchedEffect(useVirtualizedEditor) {
@@ -1233,22 +1234,40 @@ internal fun WorkspaceBrowserPanel(
                     modifier = Modifier.fillMaxSize(),
                     onAction = { action ->
                         val currentValue = editorFieldValue
-                        val outcome = applyEditorTool(action, currentValue, openedFile.orEmpty())
-                        outcome.clipboardText?.let { clipboardManager.setText(AnnotatedString(it)) }
-                        var accepted = true
-                        if (outcome.value.text != currentValue.text) {
-                            accepted = updateEditorText(editorPath, outcome.value.text)
-                            if (accepted) {
-                                editorFieldValue = outcome.value
-                                selectedFindRange = null
+                        if (action == EditorToolAction.DESCRIBE_SYMBOL) {
+                            languageSymbolReference = describeLanguageSymbolAt(
+                                sourceText = currentValue.text,
+                                path = openedFile.orEmpty(),
+                                caretOffset = currentValue.selection.end,
+                                selectionStart = currentValue.selection.min,
+                                selectionEnd = currentValue.selection.max,
+                            )
+                            message = if (languageSymbolReference == null) {
+                                "No symbol or syntax description is available at the caret."
+                            } else {
+                                ""
                             }
                         } else {
-                            editorFieldValue = outcome.value
+                            val outcome = applyEditorTool(action, currentValue, openedFile.orEmpty())
+                            outcome.clipboardText?.let { clipboardManager.setText(AnnotatedString(it)) }
+                            var accepted = true
+                            if (outcome.value.text != currentValue.text) {
+                                accepted = updateEditorText(editorPath, outcome.value.text)
+                                if (accepted) {
+                                    editorFieldValue = outcome.value
+                                    selectedFindRange = null
+                                }
+                            } else {
+                                editorFieldValue = outcome.value
+                            }
+                            message = if (accepted) outcome.message else "The editor could not apply this change; the draft was left unchanged."
+                            runCatching { editorFocusRequester.requestFocus() }
                         }
-                        message = if (accepted) outcome.message else "The editor could not apply this change; the draft was left unchanged."
-                        runCatching { editorFocusRequester.requestFocus() }
                     },
                 )
+                LanguageSymbolReferenceDialog(languageSymbolReference) {
+                    languageSymbolReference = null
+                }
                     }
                 }
                 }
