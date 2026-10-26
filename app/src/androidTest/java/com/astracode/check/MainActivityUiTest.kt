@@ -332,6 +332,11 @@ class MainActivityUiTest {
         waitForUiStage("bundle ZIP entry after bulk action") {
             runCatching { composeRule.onNodeWithTag("workspace-entry-bundle.zip").assertIsDisplayed() }.isSuccess
         }
+        waitForUiStage("ZIP creation dialog is dismissed") {
+            runCatching {
+                composeRule.onAllNodesWithTag("workspace-bulk-input").assertCountEquals(0)
+            }.isSuccess
+        }
         composeRule.onNodeWithTag("workspace-entry-bundle.zip").performClick()
         composeRule.onNodeWithTag("workspace-operation-input").assertIsDisplayed()
         composeRule.onNodeWithTag("workspace-operation-input").performTextReplacement("app/restored")
