@@ -1243,7 +1243,18 @@ class MainActivityUiTest {
             runCatching { composeRule.onNodeWithTag("workspace-tree-root").assertIsDisplayed() }.isSuccess
         }
 
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-tree-folder-app").assertIsDisplayed() }.isSuccess
+        }
         composeRule.onNodeWithTag("workspace-tree-folder-app").assertIsDisplayed()
+        composeRule.onNodeWithTag("workspace-tree-expand-root").performClick()
+        assertTrue(
+            runCatching { composeRule.onNodeWithTag("workspace-tree-folder-app").assertIsDisplayed() }.isFailure,
+        )
+        composeRule.onNodeWithTag("workspace-tree-expand-root").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-tree-folder-app").assertIsDisplayed() }.isSuccess
+        }
         assertTrue(
             runCatching { composeRule.onNodeWithTag("workspace-tree-folder-app-src").assertIsDisplayed() }.isFailure,
         )
