@@ -365,7 +365,7 @@ internal fun LanguageSymbolReferenceDialog(reference: LanguageSymbolReference?, 
         title = {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(reference.symbol, style = MaterialTheme.typography.titleLarge, modifier = Modifier.testTag("language-reference-symbol"))
-                Text(reference.language + " · " + reference.category, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(reference.language + " · " + reference.category, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.testTag("language-reference-category"))
             }
         },
         text = {
