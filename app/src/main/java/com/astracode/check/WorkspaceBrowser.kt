@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Button
@@ -122,6 +123,7 @@ internal fun WorkspaceBrowserPanel(
     onClose: () -> Unit,
 ) {
     var currentDirectory by remember(root) { mutableStateOf("") }
+    var showWorkspaceTree by remember(root) { mutableStateOf(false) }
     var entries by remember(root) { mutableStateOf(emptyList<WorkspaceEntry>()) }
     var folderCounts by remember(root) { mutableStateOf(emptyMap<String, Int>()) }
     var refreshKey by remember(root) { mutableStateOf(0) }
@@ -807,6 +809,12 @@ internal fun WorkspaceBrowserPanel(
             Text("Reading metadata…", modifier = Modifier.testTag("workspace-metadata-loading"))
         }
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(
+                onClick = { showWorkspaceTree = true },
+                modifier = Modifier.testTag("workspace-tree-menu-button"),
+            ) {
+                Icon(Icons.Filled.Menu, contentDescription = "Open workspace tree")
+            }
             Text(if (archivePath == null) "Workspace files" else "ZIP: " + archivePath!!.substringAfterLast("/"), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
             if (openedArchiveEntry == null && archivePath == null && !selectionMode) {
                 Box {
@@ -2363,6 +2371,46 @@ internal fun WorkspaceBrowserPanel(
                 }, modifier = Modifier.testTag("confirm-workspace-delete")) { Text("Delete") }
             },
             dismissButton = { TextButton(onClick = { pendingDeleteEntry = null }) { Text("Cancel") } })
+    }
+
+    if (showWorkspaceTree) {
+        WorkspaceTreeDialog(
+            root = root,
+            currentDirectory = currentDirectory,
+            openedFile = openedFile,
+            onNavigateToDirectory = { path ->
+                showWorkspaceTree = false
+                archivePath = null
+                archiveDirectory = ""
+                openedArchiveEntry = null
+                openedFile = null
+                currentDirectory = path
+                selectionMode = false
+                selectedPaths = emptySet()
+                refreshKey++
+            },
+            onOpenFile = { path ->
+                showWorkspaceTree = false
+                val name = path.substringAfterLast('/')
+                if (name.endsWith(".zip", ignoreCase = true)) {
+                    val file = File(root, path)
+                    operationEntry = WorkspaceEntry(
+                        path = path,
+                        name = name,
+                        isDirectory = false,
+                        sizeBytes = file.length(),
+                        isHidden = name.startsWith("."),
+                    )
+                    operationKind = "extract"
+                    operationInput = path.replace(Regex("(?i)\\.zip$"), "")
+                } else {
+                    archivePath = null
+                    openedArchiveEntry = null
+                    activateEditorFile(path)
+                }
+            },
+            onDismiss = { showWorkspaceTree = false },
+        )
     }
 
     if (showCreateFileDialog) {
