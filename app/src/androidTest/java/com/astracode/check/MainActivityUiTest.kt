@@ -348,6 +348,11 @@ class MainActivityUiTest {
             "TOKEN=original",
             File(workspaceRoot, "app/restored/src/.env").readText(),
         )
+        waitForUiStage("extraction dialog is dismissed") {
+            runCatching {
+                composeRule.onAllNodesWithTag("workspace-operation-input").assertCountEquals(0)
+            }.isSuccess
+        }
     }
 
 
