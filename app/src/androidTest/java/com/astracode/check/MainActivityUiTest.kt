@@ -11,7 +11,6 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertTextEquals
-import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performClick
@@ -305,15 +304,15 @@ class MainActivityUiTest {
         }
 
         composeRule.onNodeWithTag("workspace-toggle-selection").performClick()
-        composeRule.onNodeWithTag("workspace-select-build.gradle.kts", useUnmergedTree = true)
-            .assertIsDisplayed().assertIsEnabled().performTouchInput { click() }
+        composeRule.onNodeWithTag("workspace-select-build.gradle.kts")
+            .assertIsDisplayed().assertIsEnabled().performClick()
         waitForUiStage("build.gradle.kts is selected") {
             runCatching {
                 composeRule.onNodeWithTag("workspace-selection-count").assertTextEquals("1 selected")
             }.isSuccess
         }
-        composeRule.onNodeWithTag("workspace-select-src", useUnmergedTree = true)
-            .assertIsDisplayed().assertIsEnabled().performTouchInput { click() }
+        composeRule.onNodeWithTag("workspace-select-src")
+            .assertIsDisplayed().assertIsEnabled().performClick()
         waitForUiStage("build.gradle.kts and src are selected") {
             runCatching {
                 composeRule.onNodeWithTag("workspace-selection-count").assertTextEquals("2 selected")
