@@ -1209,12 +1209,16 @@ class MainActivityUiTest {
             .fetchSemanticsNode().config[SemanticsProperties.Text].joinToString(" ") { it.text }
         val descriptionText = composeRule.onNodeWithTag("language-reference-description", useUnmergedTree = true)
             .fetchSemanticsNode().config[SemanticsProperties.Text].joinToString(" ") { it.text }
-        println("SYMBOL_REFERENCE_UI_CATEGORY=$categoryText")
-        println("SYMBOL_REFERENCE_UI_DESCRIPTION=$descriptionText")
-        println("SYMBOL_REFERENCE_EXPECTED_PATH_RESULT=" + describeLanguageSymbolAt("println", "SymbolReference.kt", 7))
+        val expectedReference = describeLanguageSymbolAt("println", "SymbolReference.kt", 7)
         composeRule.onNodeWithTag("language-reference-symbol", useUnmergedTree = true).assertTextContains("println")
-        composeRule.onNodeWithTag("language-reference-category", useUnmergedTree = true).assertTextContains("Built-in function")
-        composeRule.onNodeWithTag("language-reference-description", useUnmergedTree = true).assertTextContains("standard output")
+        assertTrue(
+            "Symbol reference category mismatch: actual=[$categoryText], expected helper=[$expectedReference], description=[$descriptionText]",
+            categoryText.contains("Built-in function"),
+        )
+        assertTrue(
+            "Symbol reference description mismatch: actual=[$descriptionText], expected helper=[$expectedReference]",
+            descriptionText.contains("standard output"),
+        )
         composeRule.onNodeWithTag("language-reference-close").performClick()
     }
 
