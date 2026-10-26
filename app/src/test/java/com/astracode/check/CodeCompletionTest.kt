@@ -38,6 +38,36 @@ class CodeCompletionTest {
     }
 
     @Test
+    fun completionAtMiddleOfLinePreservesSurroundingTextAndCaret() {
+        val source = "val result = pri + 1"
+        val caret = source.indexOf("pri") + "pri".length
+        val prefixRange = codeCompletionPrefixRange(source, caret)
+        assertTrue(codeCompletionSuggestions(source, "Main.kt", caret).contains("println"))
+
+        val completed = applyCodeCompletionAtRange(
+            TextFieldValue(source, selection = TextRange(caret)),
+            "println",
+            prefixRange!!,
+        )
+
+        assertEquals("val result = println + 1", completed?.text)
+        assertEquals(TextRange(source.indexOf("pri") + "println".length), completed?.selection)
+    }
+
+    @Test
+    fun suggestionsFollowChangedPrefixAndCaretPosition() {
+        val source = "println()"
+        val afterPrin = codeCompletionSuggestions(source, "Main.kt", 4)
+        assertTrue(afterPrin.contains("println"))
+
+        val afterPrint = codeCompletionSuggestions(source, "Main.kt", 5)
+        assertTrue(afterPrint.contains("println"))
+        assertFalse(afterPrint.contains("print"))
+
+        assertTrue(codeCompletionSuggestions(source, "Main.kt", source.length).isEmpty())
+    }
+
+    @Test
     fun completionStillTargetsTheActiveCaretWhenTheSelectionAnchorMoves() {
         val value = TextFieldValue("fun pri()", selection = TextRange(4, 7))
         val completed = applyCodeCompletion(value, "println")

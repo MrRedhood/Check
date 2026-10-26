@@ -91,6 +91,18 @@ class EditorTextToolsTest {
     }
 
     @Test
+    fun replaceAllReplacesEveryOccurrenceAndKeepsUnrelatedTextAndCaret() {
+        val source = "keep target; keep target; untouched"
+        val value = TextFieldValue(source, selection = TextRange(source.indexOf("untouched")))
+
+        val (replaced, count) = replaceAllMatches(value, "target", "answer")
+
+        assertEquals(2, count)
+        assertEquals("keep answer; keep answer; untouched", replaced.text)
+        assertEquals(TextRange(replaced.text.indexOf("untouched")), replaced.selection)
+    }
+
+    @Test
     fun emptySearchNeverMatchesOrChangesText() {
         val value = TextFieldValue("keep me")
         assertEquals(0, countMatches(value.text, ""))

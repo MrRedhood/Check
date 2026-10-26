@@ -149,8 +149,13 @@ class MainActivityUiTest {
         }
         composeRule.onNodeWithTag("editor-completion-println").performClick()
         waitForUiStage("chosen completion replaces the prefix") {
-            runCatching { editor.assertTextContains("fun println", substring = true) }.isSuccess
+            runCatching { editor.assertTextEquals("1 │ ready fun println") }.isSuccess
         }
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            sample.readText() == "ready fun println"
+        }
+        assertEquals("ready fun println", sample.readText())
     }
 
     @Test
@@ -993,6 +998,58 @@ class MainActivityUiTest {
         }
     }
 
+
+    @Test
+    fun switchingEditorTabsRestoresEachUnsavedDraft() {
+        val firstFile = File(workspaceRoot, "DraftOne.kt")
+        val secondFile = File(workspaceRoot, "DraftTwo.kt")
+        firstFile.writeText("first saved")
+        secondFile.writeText("second saved")
+
+        composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
+        composeRule.onNodeWithTag("workspace-file-list")
+            .performScrollToNode(hasTestTag("workspace-entry-DraftOne.kt"))
+        waitForUiStage("first draft file appears") {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-DraftOne.kt").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-entry-DraftOne.kt").performClick()
+        val editor = composeRule.onNodeWithTag("workspace-editor-input")
+        waitForUiStage("first draft editor opens") {
+            runCatching { editor.assertTextContains("first saved", substring = true) }.isSuccess
+        }
+        editor.performTextReplacement("first unsaved draft")
+
+        composeRule.onNodeWithTag("workspace-editor-back").performClick()
+        composeRule.onNodeWithTag("workspace-file-list")
+            .performScrollToNode(hasTestTag("workspace-entry-DraftTwo.kt"))
+        waitForUiStage("second draft file appears") {
+            runCatching { composeRule.onNodeWithTag("workspace-entry-DraftTwo.kt").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-entry-DraftTwo.kt").performClick()
+        waitForUiStage("second draft editor opens") {
+            runCatching { editor.assertTextContains("second saved", substring = true) }.isSuccess
+        }
+        editor.performTextReplacement("second unsaved draft")
+
+        composeRule.onNodeWithTag("workspace-tab-DraftOne.kt").performClick()
+        waitForUiStage("switching back restores the first draft") {
+            runCatching { editor.assertTextEquals("1 │ first unsaved draft") }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-tab-DraftTwo.kt").performClick()
+        waitForUiStage("switching forward restores the second draft") {
+            runCatching { editor.assertTextEquals("1 │ second unsaved draft") }.isSuccess
+        }
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            secondFile.readText() == "second unsaved draft"
+        }
+        composeRule.onNodeWithTag("workspace-tab-DraftOne.kt").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            firstFile.readText() == "first unsaved draft"
+        }
+        assertEquals("first unsaved draft", firstFile.readText())
+        assertEquals("second unsaved draft", secondFile.readText())
+    }
 
     @Test
     fun workspaceEditorCanFindAndReplaceSingleAndAllMatches() {
