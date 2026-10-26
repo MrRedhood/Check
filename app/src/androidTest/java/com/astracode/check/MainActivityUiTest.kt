@@ -1058,6 +1058,57 @@ class MainActivityUiTest {
     }
 
     @Test
+    fun switchingBetweenDirtyTabsRepeatedlyKeepsDraftsWithTheirFiles() {
+        val firstFile = File(workspaceRoot, "DraftOne.kt")
+        val secondFile = File(workspaceRoot, "DraftTwo.kt")
+        firstFile.writeText("first saved")
+        secondFile.writeText("second saved")
+
+        composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
+        composeRule.onNodeWithTag("workspace-file-list")
+            .performScrollToNode(hasTestTag("workspace-entry-DraftOne.kt"))
+        composeRule.onNodeWithTag("workspace-entry-DraftOne.kt").performClick()
+        val editor = composeRule.onNodeWithTag("workspace-editor-input")
+        waitForUiStage("stress test first editor opens") {
+            runCatching { editor.assertTextContains("first saved", substring = true) }.isSuccess
+        }
+        editor.performTextReplacement("first draft 0")
+        composeRule.onNodeWithTag("workspace-editor-back").performClick()
+
+        composeRule.onNodeWithTag("workspace-file-list")
+            .performScrollToNode(hasTestTag("workspace-entry-DraftTwo.kt"))
+        composeRule.onNodeWithTag("workspace-entry-DraftTwo.kt").performClick()
+        waitForUiStage("stress test second editor opens") {
+            runCatching { editor.assertTextContains("second saved", substring = true) }.isSuccess
+        }
+        editor.performTextReplacement("second draft 0")
+
+        repeat(15) { iteration ->
+            composeRule.onNodeWithTag("workspace-tab-DraftOne.kt").performClick()
+            waitForUiStage("stress restore first draft $iteration") {
+                editableEditorText() == "1 │ first draft $iteration"
+            }
+            editor.performTextReplacement("first draft ${iteration + 1}")
+
+            composeRule.onNodeWithTag("workspace-tab-DraftTwo.kt").performClick()
+            waitForUiStage("stress restore second draft $iteration") {
+                editableEditorText() == "1 │ second draft $iteration"
+            }
+            editor.performTextReplacement("second draft ${iteration + 1}")
+        }
+
+        composeRule.onNodeWithTag("workspace-tab-DraftOne.kt").performClick()
+        waitForUiStage("final first draft survives switching") {
+            editableEditorText() == "1 │ first draft 15"
+        }
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            firstFile.readText() == "first draft 15" && secondFile.readText() == "second draft 15"
+        }
+        assertEquals("first draft 15", firstFile.readText())
+        assertEquals("second draft 15", secondFile.readText())
+    }
+
+    @Test
     fun workspaceEditorCanFindAndReplaceSingleAndAllMatches() {
         val sample = File(workspaceRoot, "SearchReplace.kt")
         sample.writeText("val target = 1\nval target = 2\n")
