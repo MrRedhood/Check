@@ -2368,7 +2368,6 @@ internal fun WorkspaceBrowserPanel(
                         } else {
                             val destinationPath = joinWorkspacePath(creationBaseDirectory, normalizedName)
                             scope.launch {
-                                val linkedPathsSnapshot = syncedPaths
                                 val result = runCatching {
                                     withContext(Dispatchers.IO) {
                                         val target = resolveWorkspacePath(root, destinationPath)
@@ -2429,6 +2428,7 @@ internal fun WorkspaceBrowserPanel(
                         } else {
                             val destinationPath = joinWorkspacePath(creationBaseDirectory, name)
                             scope.launch {
+                                val linkedPathsSnapshot = syncedPaths
                                 runCatching {
                                     withContext(Dispatchers.IO) {
                                         val target = resolveWorkspacePath(root, destinationPath)
