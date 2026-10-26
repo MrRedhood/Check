@@ -1669,25 +1669,23 @@ internal fun WorkspaceBrowserPanel(
                 items(entries, key = { it.path }) { entry ->
                     Row(
                         modifier = Modifier.fillMaxWidth()
-                            .combinedClickable(
-                                onClick = {
-                                    if (selectionMode) {
-                                        selectedPaths = if (entry.path in selectedPaths) selectedPaths - entry.path
-                                            else selectedPaths + entry.path
-                                    } else if (entry.isDirectory) {
-                                        currentDirectory = entry.path
-                                        refreshKey++
-                                    } else if (entry.name.endsWith(".zip", ignoreCase = true)) {
-                                        operationEntry = entry
-                                        operationKind = "extract"
-                                        operationInput = entry.path.replace(Regex("(?i)\\.zip$"), "")
-                                    } else activateEditorFile(entry.path)
-                                },
-                                onLongClick = {
-                                    if (selectionMode) {
-                                        selectedPaths = if (entry.path in selectedPaths) selectedPaths - entry.path
-                                            else selectedPaths + entry.path
-                                    } else actionEntry = entry
+                            .then(
+                                if (selectionMode) {
+                                    Modifier
+                                } else {
+                                    Modifier.combinedClickable(
+                                        onClick = {
+                                            if (entry.isDirectory) {
+                                                currentDirectory = entry.path
+                                                refreshKey++
+                                            } else if (entry.name.endsWith(".zip", ignoreCase = true)) {
+                                                operationEntry = entry
+                                                operationKind = "extract"
+                                                operationInput = entry.path.replace(Regex("(?i)\\.zip$"), "")
+                                            } else activateEditorFile(entry.path)
+                                        },
+                                        onLongClick = { actionEntry = entry },
+                                    )
                                 },
                             )
                             .padding(horizontal = 6.dp, vertical = 8.dp)
@@ -1703,36 +1701,50 @@ internal fun WorkspaceBrowserPanel(
                                 modifier = Modifier.testTag("workspace-select-" + entry.name),
                             )
                         }
-                        Icon(
-                            imageVector = when {
-                                entry.isDirectory -> Icons.Filled.Folder
-                                entry.name.endsWith(".zip", ignoreCase = true) -> Icons.Filled.Archive
-                                else -> Icons.Filled.Description
-                            },
-                            contentDescription = when {
-                                entry.isDirectory -> "Folder"
-                                entry.name.endsWith(".zip", ignoreCase = true) -> "ZIP archive"
-                                else -> "File"
-                            },
-                            modifier = Modifier.testTag("workspace-entry-icon-${entry.name}"),
-                        )
-                        Spacer(Modifier.padding(4.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(entry.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            val detail = when {
-                                entry.isDirectory -> {
-                                    val count = folderCounts[entry.path] ?: 0
-                                    "$count " + if (count == 1) "item" else "items"
-                                }
-                                entry.isHidden -> "Hidden file · " + entry.sizeBytes + " bytes"
-                                else -> entry.sizeBytes.toString() + " bytes"
-                            }
-                            Text(
-                                detail,
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = if (entry.isDirectory) Modifier.testTag("workspace-folder-count-" + entry.name)
-                                    else Modifier.testTag("workspace-entry-detail-" + entry.name),
+                        Row(
+                            modifier = Modifier.weight(1f).then(
+                                if (selectionMode) {
+                                    Modifier.clickable {
+                                        selectedPaths = if (entry.path in selectedPaths) selectedPaths - entry.path
+                                            else selectedPaths + entry.path
+                                    }
+                                } else {
+                                    Modifier
+                                },
+                            ),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                imageVector = when {
+                                    entry.isDirectory -> Icons.Filled.Folder
+                                    entry.name.endsWith(".zip", ignoreCase = true) -> Icons.Filled.Archive
+                                    else -> Icons.Filled.Description
+                                },
+                                contentDescription = when {
+                                    entry.isDirectory -> "Folder"
+                                    entry.name.endsWith(".zip", ignoreCase = true) -> "ZIP archive"
+                                    else -> "File"
+                                },
+                                modifier = Modifier.testTag("workspace-entry-icon-${entry.name}"),
                             )
+                            Spacer(Modifier.padding(4.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(entry.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                val detail = when {
+                                    entry.isDirectory -> {
+                                        val count = folderCounts[entry.path] ?: 0
+                                        "$count " + if (count == 1) "item" else "items"
+                                    }
+                                    entry.isHidden -> "Hidden file · " + entry.sizeBytes + " bytes"
+                                    else -> entry.sizeBytes.toString() + " bytes"
+                                }
+                                Text(
+                                    detail,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = if (entry.isDirectory) Modifier.testTag("workspace-folder-count-" + entry.name)
+                                        else Modifier.testTag("workspace-entry-detail-" + entry.name),
+                                )
+                            }
                         }
                     }
                     Divider()
