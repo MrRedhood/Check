@@ -149,7 +149,7 @@ class MainActivityUiTest {
         }
         composeRule.onNodeWithTag("editor-completion-println").performClick()
         waitForUiStage("chosen completion replaces the prefix") {
-            runCatching { editor.assertTextEquals("1 │ ready fun println") }.isSuccess
+            runCatching { assertEquals("1 │ ready fun println", editableEditorText()) }.isSuccess
         }
 
         composeRule.waitUntil(timeoutMillis = 5_000) {
@@ -998,6 +998,12 @@ class MainActivityUiTest {
         }
     }
 
+    private fun editableEditorText(): String = composeRule
+        .onNodeWithTag("workspace-editor-input")
+        .fetchSemanticsNode()
+        .config[SemanticsProperties.EditableText]
+        .text
+
 
     @Test
     fun switchingEditorTabsRestoresEachUnsavedDraft() {
@@ -1033,11 +1039,11 @@ class MainActivityUiTest {
 
         composeRule.onNodeWithTag("workspace-tab-DraftOne.kt").performClick()
         waitForUiStage("switching back restores the first draft") {
-            runCatching { editor.assertTextEquals("1 │ first unsaved draft") }.isSuccess
+            runCatching { assertEquals("1 │ first unsaved draft", editableEditorText()) }.isSuccess
         }
         composeRule.onNodeWithTag("workspace-tab-DraftTwo.kt").performClick()
         waitForUiStage("switching forward restores the second draft") {
-            runCatching { editor.assertTextEquals("1 │ second unsaved draft") }.isSuccess
+            runCatching { assertEquals("1 │ second unsaved draft", editableEditorText()) }.isSuccess
         }
 
         composeRule.waitUntil(timeoutMillis = 5_000) {
