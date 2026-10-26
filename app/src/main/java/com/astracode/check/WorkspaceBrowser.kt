@@ -6,8 +6,10 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -55,6 +58,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.SolidColor
@@ -1693,14 +1697,36 @@ internal fun WorkspaceBrowserPanel(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (selectionMode) {
-                            Checkbox(
-                                checked = entry.path in selectedPaths,
-                                onCheckedChange = {
-                                    selectedPaths = if (entry.path in selectedPaths) selectedPaths - entry.path
-                                        else selectedPaths + entry.path
-                                },
-                                modifier = Modifier.testTag("workspace-select-" + entry.name),
-                            )
+                            val selected = entry.path in selectedPaths
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .toggleable(
+                                        value = selected,
+                                        role = Role.Checkbox,
+                                        onValueChange = { checked ->
+                                            selectedPaths = if (checked) selectedPaths + entry.path
+                                                else selectedPaths - entry.path
+                                        },
+                                    )
+                                    .testTag("workspace-select-" + entry.name),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(22.dp)
+                                        .border(
+                                            width = 1.dp,
+                                            color = if (selected) MaterialTheme.colorScheme.primary
+                                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        ),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    if (selected) {
+                                        Text("✓", color = MaterialTheme.colorScheme.primary)
+                                    }
+                                }
+                            }
                         }
                         Row(
                             modifier = Modifier.weight(1f).then(
