@@ -1222,4 +1222,52 @@ class MainActivityUiTest {
         composeRule.onNodeWithTag("language-reference-close").performClick()
     }
 
+
+
+    @Test
+    fun workspaceTreeMenuShowsConnectedFoldersAndOpensFiles() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val workspace = context.filesDir.toPath().resolve("workspace")
+        Files.createDirectories(workspace.resolve("app/src"))
+        val source = workspace.resolve("app/src/Main.kt")
+        Files.write(source, "fun main() = Unit\\n".toByteArray(Charsets.UTF_8))
+        composeRule.activityRule.scenario.recreate()
+
+        composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-tree-menu-button").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-tree-menu-button").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-tree-root").assertIsDisplayed() }.isSuccess
+        }
+
+        composeRule.onNodeWithTag("workspace-tree-folder-app").assertIsDisplayed()
+        assertTrue(
+            runCatching { composeRule.onNodeWithTag("workspace-tree-folder-app-src").assertIsDisplayed() }.isFailure,
+        )
+        composeRule.onNodeWithTag("workspace-tree-expand-app").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-tree-folder-app-src").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-tree-expand-app-src").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-tree-file-app-src-Main.kt").assertIsDisplayed() }.isSuccess
+        }
+
+        composeRule.onNodeWithTag("workspace-tree-expand-app").performClick()
+        assertTrue(
+            runCatching { composeRule.onNodeWithTag("workspace-tree-folder-app-src").assertIsDisplayed() }.isFailure,
+        )
+        composeRule.onNodeWithTag("workspace-tree-expand-app").performClick()
+        composeRule.onNodeWithTag("workspace-tree-expand-app-src").performClick()
+        composeRule.onNodeWithTag("workspace-tree-file-app-src-Main.kt").performClick()
+
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            runCatching {
+                composeRule.onNodeWithTag("file-editor-input").assertTextContains("fun main() = Unit", substring = true)
+            }.isSuccess
+        }
+        assertEquals("fun main() = Unit\\n", String(Files.readAllBytes(source), Charsets.UTF_8))
+    }
 }
