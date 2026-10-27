@@ -1047,6 +1047,16 @@ class MainActivityUiTest {
         return " [bulk ZIP filesystem: ${details.joinToString("; ")}; syncPrefs=$links]"
     }
 
+    private fun scrollToWorkspaceEntry(name: String) {
+        waitForUiStage("workspace row $name is loaded", timeoutMillis = 10_000) {
+            runCatching {
+                composeRule.onNodeWithTag("workspace-file-list")
+                    .performScrollToNode(hasTestTag("workspace-entry-$name"))
+                composeRule.onNodeWithTag("workspace-entry-$name").assertIsDisplayed()
+            }.isSuccess
+        }
+    }
+
     private fun waitForUiStage(stage: String, timeoutMillis: Long = 5_000, condition: () -> Boolean) {
         try {
             composeRule.waitUntil(timeoutMillis = timeoutMillis, condition = condition)
@@ -1078,8 +1088,7 @@ class MainActivityUiTest {
         secondFile.writeText("second saved")
 
         composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
-        composeRule.onNodeWithTag("workspace-file-list")
-            .performScrollToNode(hasTestTag("workspace-entry-DraftOne.kt"))
+        scrollToWorkspaceEntry("DraftOne.kt")
         waitForUiStage("first draft file appears") {
             runCatching { composeRule.onNodeWithTag("workspace-entry-DraftOne.kt").assertIsDisplayed() }.isSuccess
         }
@@ -1091,8 +1100,7 @@ class MainActivityUiTest {
         editor.performTextReplacement("first unsaved draft")
 
         composeRule.onNodeWithTag("workspace-editor-back").performClick()
-        composeRule.onNodeWithTag("workspace-file-list")
-            .performScrollToNode(hasTestTag("workspace-entry-DraftTwo.kt"))
+        scrollToWorkspaceEntry("DraftTwo.kt")
         waitForUiStage("second draft file appears") {
             runCatching { composeRule.onNodeWithTag("workspace-entry-DraftTwo.kt").assertIsDisplayed() }.isSuccess
         }
@@ -1130,8 +1138,7 @@ class MainActivityUiTest {
         secondFile.writeText("second saved")
 
         composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
-        composeRule.onNodeWithTag("workspace-file-list")
-            .performScrollToNode(hasTestTag("workspace-entry-DraftOne.kt"))
+        scrollToWorkspaceEntry("DraftOne.kt")
         composeRule.onNodeWithTag("workspace-entry-DraftOne.kt").performClick()
         val editor = composeRule.onNodeWithTag("workspace-editor-input")
         waitForUiStage("stress test first editor opens") {
@@ -1140,8 +1147,7 @@ class MainActivityUiTest {
         editor.performTextReplacement("first draft 0")
         composeRule.onNodeWithTag("workspace-editor-back").performClick()
 
-        composeRule.onNodeWithTag("workspace-file-list")
-            .performScrollToNode(hasTestTag("workspace-entry-DraftTwo.kt"))
+        scrollToWorkspaceEntry("DraftTwo.kt")
         composeRule.onNodeWithTag("workspace-entry-DraftTwo.kt").performClick()
         waitForUiStage("stress test second editor opens") {
             runCatching { editor.assertTextContains("second saved", substring = true) }.isSuccess
