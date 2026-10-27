@@ -5,9 +5,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.click
-import androidx.compose.ui.test.assertDoesNotExist
-import androidx.compose.ui.test.assertExists
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
@@ -55,12 +55,14 @@ class AstraDrawerUiTest {
         }
 
         composeRule.onNodeWithTag("drawer-workspace-workspace-test").performTouchInput { longClick() }
-        composeRule.onNodeWithText("WORKSPACE OPTIONS").assertExists()
-        composeRule.onNodeWithText("Rename").assertExists()
-        composeRule.onNodeWithText("Delete Workspace").assertExists()
-        composeRule.onNodeWithText("Cancel").assertExists()
-        composeRule.onNodeWithText("Create File").assertDoesNotExist()
-        composeRule.onNodeWithText("Create Folder").assertDoesNotExist()
+        composeRule.onNodeWithText("WORKSPACE OPTIONS").assertIsDisplayed()
+        composeRule.onNodeWithText("Rename").assertIsDisplayed()
+        composeRule.onNodeWithText("Delete Workspace").assertIsDisplayed()
+        composeRule.onNodeWithText("Cancel").assertIsDisplayed()
+        composeRule.runOnIdle {
+            assert(composeRule.onAllNodesWithText("Create File").fetchSemanticsNodes().isEmpty())
+            assert(composeRule.onAllNodesWithText("Create Folder").fetchSemanticsNodes().isEmpty())
+        }
     }
 
     @Test
