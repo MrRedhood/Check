@@ -16,6 +16,7 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.performTouchInput
@@ -1284,6 +1285,79 @@ class MainActivityUiTest {
 
 
 
+
+    @Test
+    fun hamburgerTreeCreatesRenamesAndDeletesNamedWorkspaces() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val workspaceParent = File(context.filesDir, "named-workspaces")
+        workspaceParent.deleteRecursively()
+        context.getSharedPreferences("file_access_check", android.content.Context.MODE_PRIVATE)
+            .edit().remove("named_workspaces").apply()
+        composeRule.activityRule.scenario.recreate()
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("open-workspace-browser-button").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
+        composeRule.onNodeWithTag("workspace-tree-menu-button").performClick()
+        composeRule.onNodeWithTag("workspace-tree-create-workspace").performClick()
+        composeRule.onNodeWithTag("workspace-create-name").performTextInput("Sandbox")
+        composeRule.onNodeWithTag("workspace-create-confirm").performClick()
+
+        val prefs = context.getSharedPreferences("file_access_check", android.content.Context.MODE_PRIVATE)
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { org.json.JSONArray(prefs.getString("named_workspaces", "[]")).length() == 1 }.getOrDefault(false)
+        }
+        val createdId = org.json.JSONArray(prefs.getString("named_workspaces", "[]"))
+            .getJSONObject(0).getString("id")
+        assertTrue(File(workspaceParent, createdId).isDirectory)
+
+        composeRule.onNodeWithTag("workspace-tree-menu-button").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-tree-workspace-$createdId").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-tree-workspace-$createdId").performTouchInput { longClick() }
+        composeRule.onNodeWithTag("workspace-context-rename").performClick()
+        composeRule.onNodeWithTag("workspace-rename-name").performTextReplacement("Renamed")
+        composeRule.onNodeWithTag("workspace-rename-confirm").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-tree-menu-button").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-tree-menu-button").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("workspace-tree-workspace-$createdId").assertTextContains("Renamed") }.isSuccess
+        }
+
+        composeRule.onNodeWithTag("workspace-tree-workspace-$createdId").performTouchInput { longClick() }
+        composeRule.onNodeWithTag("workspace-context-delete").performClick()
+        composeRule.onNodeWithTag("workspace-delete-confirm").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) { !File(workspaceParent, createdId).exists() }
+        assertFalse(File(workspaceParent, createdId).exists())
+    }
+
+    @Test
+    fun longPressingWorkspaceRootCanCreateFolder() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val workspace = File(context.filesDir, "workspace")
+        workspace.deleteRecursively()
+        workspace.mkdirs()
+        context.getSharedPreferences("file_access_check", android.content.Context.MODE_PRIVATE)
+            .edit().remove("named_workspaces").apply()
+        composeRule.activityRule.scenario.recreate()
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("open-workspace-browser-button").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
+        composeRule.onNodeWithTag("workspace-tree-menu-button").performClick()
+        composeRule.onNodeWithTag("workspace-tree-root").performTouchInput { longClick() }
+        composeRule.onNodeWithTag("workspace-tree-context-new-folder").performClick()
+        composeRule.onNodeWithTag("workspace-new-folder-name").performTextInput("src")
+        composeRule.onNodeWithTag("confirm-workspace-create-folder").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) { File(workspace, "src").isDirectory }
+        assertTrue(File(workspace, "src").isDirectory)
+    }
+
     @Test
     fun workspaceTreeMenuShowsConnectedFoldersAndOpensFiles() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
@@ -1304,6 +1378,7 @@ class MainActivityUiTest {
 
         composeRule.onNodeWithTag("workspace-tree-root").performTouchInput { longClick() }
         composeRule.onNodeWithTag("workspace-tree-context-new-file").assertIsDisplayed()
+        composeRule.onNodeWithTag("workspace-tree-context-new-folder").assertIsDisplayed()
         listOf(
             "workspace-tree-context-rename",
             "workspace-tree-context-delete",

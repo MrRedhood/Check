@@ -111,6 +111,12 @@ private data class WorkspaceEditorTab(
     val isLoading: Boolean = true,
 )
 
+internal data class WorkspaceOption(
+    val id: String,
+    val name: String,
+    val isBuiltIn: Boolean = false,
+)
+
 private data class WorkspaceEntry(
     val path: String,
     val name: String,
@@ -125,6 +131,13 @@ internal fun WorkspaceBrowserPanel(
     root: File,
     modifier: Modifier = Modifier,
     onClose: () -> Unit,
+    workspaceOptions: List<WorkspaceOption> = emptyList(),
+    activeWorkspaceId: String = "private",
+    workspaceDisplayName: String = root.name,
+    onSelectWorkspace: (WorkspaceOption) -> Unit = {},
+    onCreateWorkspace: (String) -> Boolean = { false },
+    onRenameWorkspace: (WorkspaceOption, String) -> Boolean = { _, _ -> false },
+    onDeleteWorkspace: (WorkspaceOption) -> Unit = {},
 ) {
     var currentDirectory by remember(root) { mutableStateOf("") }
     var showWorkspaceTree by remember(root) { mutableStateOf(false) }
@@ -157,6 +170,12 @@ internal fun WorkspaceBrowserPanel(
     var previewResult by remember(root) { mutableStateOf<WorkspacePreview?>(null) }
     var actionEntry by remember(root) { mutableStateOf<WorkspaceEntry?>(null) }
     var treeContextEntry by remember(root) { mutableStateOf<WorkspaceEntry?>(null) }
+    var treeContextWorkspace by remember(root) { mutableStateOf<WorkspaceOption?>(null) }
+    var showCreateWorkspaceDialog by remember(root) { mutableStateOf(false) }
+    var newWorkspaceName by remember(root) { mutableStateOf("") }
+    var renameWorkspaceTarget by remember(root) { mutableStateOf<WorkspaceOption?>(null) }
+    var renameWorkspaceName by remember(root) { mutableStateOf("") }
+    var pendingDeleteWorkspace by remember(root) { mutableStateOf<WorkspaceOption?>(null) }
     var pendingDeleteEntry by remember(root) { mutableStateOf<WorkspaceEntry?>(null) }
     var operationEntry by remember(root) { mutableStateOf<WorkspaceEntry?>(null) }
     var operationKind by remember(root) { mutableStateOf<String?>(null) }
@@ -2424,6 +2443,20 @@ internal fun WorkspaceBrowserPanel(
             root = root,
             currentDirectory = currentDirectory,
             openedFile = openedFile,
+            workspaces = workspaceOptions,
+            activeWorkspaceId = activeWorkspaceId,
+            workspaceDisplayName = workspaceDisplayName,
+            onCreateWorkspace = {
+                treeContextWorkspace = null
+                showWorkspaceTree = false
+                newWorkspaceName = ""
+                showCreateWorkspaceDialog = true
+            },
+            onSelectWorkspace = { option ->
+                showWorkspaceTree = false
+                onSelectWorkspace(option)
+            },
+            onLongPressWorkspace = { option -> treeContextWorkspace = option },
             onNavigateToDirectory = { path ->
                 showWorkspaceTree = false
                 archivePath = null
@@ -2500,6 +2533,16 @@ internal fun WorkspaceBrowserPanel(
                             },
                             modifier = Modifier.fillMaxWidth().testTag("workspace-tree-context-new-file"),
                         ) { Text("New file") }
+                        TextButton(
+                            onClick = {
+                                treeContextEntry = null
+                                showWorkspaceTree = false
+                                createInDirectory = entry.path
+                                createFolderName = ""
+                                showCreateFolderDialog = true
+                            },
+                            modifier = Modifier.fillMaxWidth().testTag("workspace-tree-context-new-folder"),
+                        ) { Text("New folder") }
                     }
                     if (entry.path.isNotBlank()) {
                         TextButton(
@@ -2550,6 +2593,119 @@ internal fun WorkspaceBrowserPanel(
                     onClick = { treeContextEntry = null },
                     modifier = Modifier.testTag("workspace-tree-context-cancel"),
                 ) { Text("Cancel") }
+            },
+        )
+    }
+
+    treeContextWorkspace?.let { option ->
+        AlertDialog(
+            onDismissRequest = { treeContextWorkspace = null },
+            title = { Text(option.name + " options") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    if (!option.isBuiltIn) {
+                        TextButton(
+                            onClick = {
+                                treeContextWorkspace = null
+                                renameWorkspaceTarget = option
+                                renameWorkspaceName = option.name
+                            },
+                            modifier = Modifier.fillMaxWidth().testTag("workspace-context-rename"),
+                        ) { Text("Rename") }
+                        TextButton(
+                            onClick = {
+                                treeContextWorkspace = null
+                                pendingDeleteWorkspace = option
+                            },
+                            modifier = Modifier.fillMaxWidth().testTag("workspace-context-delete"),
+                        ) { Text("Delete") }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { treeContextWorkspace = null },
+                    modifier = Modifier.testTag("workspace-context-cancel"),
+                ) { Text("Cancel") }
+            },
+        )
+    }
+
+    if (showCreateWorkspaceDialog) {
+        AlertDialog(
+            onDismissRequest = { showCreateWorkspaceDialog = false },
+            title = { Text("Create workspace") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("A new empty workspace will be created and opened for coding.")
+                    OutlinedTextField(
+                        value = newWorkspaceName,
+                        onValueChange = { newWorkspaceName = it },
+                        label = { Text("Workspace name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("workspace-create-name"),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (onCreateWorkspace(newWorkspaceName)) showCreateWorkspaceDialog = false
+                    },
+                    modifier = Modifier.testTag("workspace-create-confirm"),
+                ) { Text("Create") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCreateWorkspaceDialog = false }) { Text("Cancel") }
+            },
+        )
+    }
+
+    renameWorkspaceTarget?.let { option ->
+        AlertDialog(
+            onDismissRequest = { renameWorkspaceTarget = null },
+            title = { Text("Rename workspace") },
+            text = {
+                OutlinedTextField(
+                    value = renameWorkspaceName,
+                    onValueChange = { renameWorkspaceName = it },
+                    label = { Text("Workspace name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().testTag("workspace-rename-name"),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (onRenameWorkspace(option, renameWorkspaceName)) renameWorkspaceTarget = null
+                    },
+                    modifier = Modifier.testTag("workspace-rename-confirm"),
+                ) { Text("Rename") }
+            },
+            dismissButton = {
+                TextButton(onClick = { renameWorkspaceTarget = null }) { Text("Cancel") }
+            },
+        )
+    }
+
+    pendingDeleteWorkspace?.let { option ->
+        AlertDialog(
+            onDismissRequest = { pendingDeleteWorkspace = null },
+            title = { Text("Delete workspace?") },
+            text = {
+                Text("Delete " + option.name + " and the files created inside this AstraCode workspace? This cannot be undone.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onDeleteWorkspace(option)
+                        pendingDeleteWorkspace = null
+                    },
+                    modifier = Modifier.testTag("workspace-delete-confirm"),
+                ) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDeleteWorkspace = null }) { Text("Cancel") }
             },
         )
     }

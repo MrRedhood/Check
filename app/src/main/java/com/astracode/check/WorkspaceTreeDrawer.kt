@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Folder
@@ -67,11 +68,18 @@ private data class VisibleWorkspaceTreeEntry(
     val connectorHasNext: List<Boolean>,
 )
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun WorkspaceTreeDialog(
     root: File,
     currentDirectory: String,
     openedFile: String?,
+    workspaces: List<WorkspaceOption>,
+    activeWorkspaceId: String,
+    workspaceDisplayName: String,
+    onCreateWorkspace: () -> Unit,
+    onSelectWorkspace: (WorkspaceOption) -> Unit,
+    onLongPressWorkspace: (WorkspaceOption) -> Unit,
     onNavigateToDirectory: (String) -> Unit,
     onOpenFile: (String) -> Unit,
     onLongPressEntry: (String, Boolean) -> Unit,
@@ -180,12 +188,19 @@ internal fun WorkspaceTreeDialog(
                                 modifier = Modifier.testTag("workspace-tree-title"),
                             )
                             Text(
-                                root.name.ifBlank { "Workspace root" },
+                                workspaceDisplayName.ifBlank { root.name.ifBlank { "Workspace root" } },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.testTag("workspace-tree-active-name"),
                             )
+                        }
+                        IconButton(
+                            onClick = onCreateWorkspace,
+                            modifier = Modifier.testTag("workspace-tree-create-workspace"),
+                        ) {
+                            Icon(Icons.Filled.Add, contentDescription = "Create workspace")
                         }
                         IconButton(onClick = onDismiss, modifier = Modifier.testTag("workspace-tree-close")) {
                             Icon(Icons.Filled.Close, contentDescription = "Close workspace tree")
@@ -195,6 +210,61 @@ internal fun WorkspaceTreeDialog(
                     LazyColumn(
                         modifier = Modifier.fillMaxSize().testTag("workspace-tree-list"),
                     ) {
+                        item(key = "workspace-section-title") {
+                            Text(
+                                "WORKSPACES",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.fillMaxWidth().padding(start = 8.dp, top = 10.dp, bottom = 4.dp),
+                            )
+                        }
+                        items(workspaces, key = { "workspace-option-" + it.id }) { option ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .combinedClickable(
+                                        onClick = { onSelectWorkspace(option) },
+                                        onLongClick = { onLongPressWorkspace(option) },
+                                    )
+                                    .padding(horizontal = 8.dp, vertical = 9.dp)
+                                    .testTag("workspace-tree-workspace-" + option.id),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    Icons.Filled.FolderOpen,
+                                    contentDescription = null,
+                                    tint = if (option.id == activeWorkspaceId) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                Text(
+                                    option.name,
+                                    modifier = Modifier.weight(1f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = if (option.id == activeWorkspaceId) MaterialTheme.typography.bodyMedium.copy(
+                                        fontWeight = FontWeight.SemiBold,
+                                    ) else MaterialTheme.typography.bodyMedium,
+                                )
+                                if (option.id == activeWorkspaceId) {
+                                    Text(
+                                        "Current",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
+                            }
+                        }
+                        item(key = "workspace-files-title") {
+                            Divider()
+                            Text(
+                                "FILES",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.fillMaxWidth().padding(start = 8.dp, top = 10.dp, bottom = 4.dp),
+                            )
+                        }
                         item(key = "workspace-root") {
                             WorkspaceTreeRow(
                                 path = "",

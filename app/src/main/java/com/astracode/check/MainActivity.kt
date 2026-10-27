@@ -48,13 +48,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.File
+import java.util.UUID
 
 private const val PREFS_NAME = "file_access_check"
 private const val SAVED_URIS_KEY = "saved_document_uris"
 private const val ACTIVE_URI_KEY = "active_document_uri"
+private const val WORKSPACES_KEY = "named_workspaces"
 private const val MAX_DOCUMENT_BYTES = 8L * 1024L * 1024L
 
 private data class SavedDocument(
@@ -72,6 +75,9 @@ class MainActivity : ComponentActivity() {
         val initialActive = preferences.getString(ACTIVE_URI_KEY, null)
             ?.let(Uri::parse)
             ?.let { uri -> initialDocuments.firstOrNull { it.uri == uri } }
+        val initialWorkspaceOptions = listOf(
+            WorkspaceOption(id = "private", name = "Private workspace", isBuiltIn = true),
+        ) + decodeWorkspaceOptions(preferences.getString(WORKSPACES_KEY, null))
 
         setContent {
             var savedDocuments by remember { mutableStateOf(initialDocuments) }
@@ -83,6 +89,9 @@ class MainActivity : ComponentActivity() {
             var showWorkspaceBrowser by remember { mutableStateOf(false) }
             var showAtelierPreview by remember { mutableStateOf(false) }
             var message by remember { mutableStateOf("") }
+            var workspaceOptions by remember { mutableStateOf(initialWorkspaceOptions) }
+            var activeWorkspaceId by remember { mutableStateOf("private") }
+            var workspaceRoot by remember { mutableStateOf(File(filesDir, "workspace")) }
             val scope = rememberCoroutineScope()
 
             fun saveBookmarks(documents: List<SavedDocument>) {
@@ -98,6 +107,110 @@ class MainActivity : ComponentActivity() {
                 savedText = ""
                 loading = false
                 preferences.edit().remove(ACTIVE_URI_KEY).apply()
+            }
+
+            fun saveWorkspaceOptions(options: List<WorkspaceOption>) {
+                workspaceOptions = listOf(
+                    WorkspaceOption(id = "private", name = "Private workspace", isBuiltIn = true),
+                ) + options.filterNot { it.isBuiltIn }
+                preferences.edit()
+                    .putString(WORKSPACES_KEY, encodeWorkspaceOptions(options.filterNot { it.isBuiltIn }))
+                    .apply()
+            }
+
+            fun workspaceDirectory(option: WorkspaceOption): File =
+                if (option.isBuiltIn) {
+                    File(filesDir, "workspace")
+                } else {
+                    File(File(filesDir, "named-workspaces"), option.id)
+                }
+
+            fun selectWorkspace(option: WorkspaceOption) {
+                val nextRoot = workspaceDirectory(option)
+                if (!nextRoot.exists() && !nextRoot.mkdirs() && !nextRoot.isDirectory) {
+                    message = "Could not open workspace " + option.name
+                    return
+                }
+                activeWorkspaceId = option.id
+                workspaceRoot = nextRoot
+                message = "Using workspace " + option.name
+            }
+
+            fun createWorkspace(rawName: String): Boolean {
+                val name = rawName.trim()
+                if (name.isBlank()) {
+                    message = "Enter a workspace name."
+                    return false
+                }
+                if (workspaceOptions.any { it.name.equals(name, ignoreCase = true) }) {
+                    message = "A workspace with that name already exists."
+                    return false
+                }
+                val option = WorkspaceOption(
+                    id = "workspace-" + UUID.randomUUID().toString(),
+                    name = name,
+                    isBuiltIn = false,
+                )
+                val parent = File(filesDir, "named-workspaces")
+                val directory = File(parent, option.id)
+                if (!parent.exists() && !parent.mkdirs()) {
+                    message = "Could not create the workspace folder."
+                    return false
+                }
+                if (!directory.mkdirs()) {
+                    message = "Could not create the workspace folder."
+                    return false
+                }
+                saveWorkspaceOptions(workspaceOptions.filterNot { it.isBuiltIn } + option)
+                activeWorkspaceId = option.id
+                workspaceRoot = directory
+                message = "Created and opened workspace " + name
+                return true
+            }
+
+            fun renameWorkspace(option: WorkspaceOption, rawName: String): Boolean {
+                if (option.isBuiltIn) {
+                    message = "The built-in Private workspace cannot be renamed."
+                    return false
+                }
+                val name = rawName.trim()
+                if (name.isBlank()) {
+                    message = "Enter a workspace name."
+                    return false
+                }
+                if (workspaceOptions.any { it.id != option.id && it.name.equals(name, ignoreCase = true) }) {
+                    message = "A workspace with that name already exists."
+                    return false
+                }
+                saveWorkspaceOptions(
+                    workspaceOptions.filterNot { it.isBuiltIn }.map {
+                        if (it.id == option.id) it.copy(name = name) else it
+                    },
+                )
+                message = "Renamed workspace to " + name
+                return true
+            }
+
+            fun deleteWorkspace(option: WorkspaceOption) {
+                if (option.isBuiltIn) {
+                    message = "The built-in Private workspace is kept as a safe fallback."
+                    return
+                }
+                val parent = File(filesDir, "named-workspaces").canonicalFile
+                val directory = File(parent, option.id).canonicalFile
+                if (directory.parentFile != parent || directory == parent) {
+                    message = "Refused to delete a workspace outside the workspace folder."
+                    return
+                }
+                if (directory.exists() && !directory.deleteRecursively()) {
+                    message = "Could not fully delete workspace " + option.name
+                    return
+                }
+                saveWorkspaceOptions(workspaceOptions.filterNot { it.id == option.id })
+                if (activeWorkspaceId == option.id) {
+                    selectWorkspace(workspaceOptions.first { it.isBuiltIn })
+                }
+                message = "Deleted workspace " + option.name
             }
 
             fun openPickedFile(uri: Uri) {
@@ -198,9 +311,17 @@ class MainActivity : ComponentActivity() {
                             AtelierPreviewScreen(onBack = { showAtelierPreview = false })
                         } else if (showWorkspaceBrowser) {
                             WorkspaceBrowserPanel(
-                                root = File(filesDir, "workspace"),
+                                root = workspaceRoot,
                                 modifier = Modifier.weight(1f).fillMaxWidth(),
                                 onClose = { showWorkspaceBrowser = false },
+                                workspaceOptions = workspaceOptions,
+                                activeWorkspaceId = activeWorkspaceId,
+                                workspaceDisplayName = workspaceOptions.firstOrNull { it.id == activeWorkspaceId }?.name
+                                    ?: "Private workspace",
+                                onSelectWorkspace = ::selectWorkspace,
+                                onCreateWorkspace = ::createWorkspace,
+                                onRenameWorkspace = ::renameWorkspace,
+                                onDeleteWorkspace = ::deleteWorkspace,
                             )
                         } else {
                         if (message.isNotBlank()) {
@@ -404,3 +525,28 @@ private fun writeDocument(context: Context, uri: Uri, content: String) {
         stream.flush()
     }
 }
+
+
+private fun decodeWorkspaceOptions(raw: String?): List<WorkspaceOption> {
+    if (raw.isNullOrBlank()) return emptyList()
+    return runCatching {
+        val json = JSONArray(raw)
+        buildList {
+            for (index in 0 until json.length()) {
+                val item = json.getJSONObject(index)
+                val id = item.optString("id").takeIf {
+                    Regex("workspace-[A-Za-z0-9-]+").matches(it)
+                } ?: continue
+                val name = item.optString("name").trim().takeIf { it.isNotBlank() } ?: continue
+                add(WorkspaceOption(id = id, name = name, isBuiltIn = false))
+            }
+        }.distinctBy { it.id }.distinctBy { it.name.lowercase() }
+    }.getOrDefault(emptyList())
+}
+
+private fun encodeWorkspaceOptions(options: List<WorkspaceOption>): String =
+    JSONArray().apply {
+        options.filterNot { it.isBuiltIn }.forEach { option ->
+            put(JSONObject().put("id", option.id).put("name", option.name))
+        }
+    }.toString()
