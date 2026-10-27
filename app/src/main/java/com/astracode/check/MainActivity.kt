@@ -53,6 +53,8 @@ import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.File
 import java.util.UUID
+import com.astracode.ui.screens.EditorWelcomeScreen
+import com.astracode.ui.theme.AstraCodeTheme
 
 private const val PREFS_NAME = "file_access_check"
 private const val SAVED_URIS_KEY = "saved_document_uris"
@@ -86,6 +88,7 @@ class MainActivity : ComponentActivity() {
         ) + decodeWorkspaceOptions(preferences.getString(WORKSPACES_KEY, null))
 
         setContent {
+            AstraCodeTheme {
             var savedDocuments by remember { mutableStateOf(initialDocuments) }
             var activeDocument by remember { mutableStateOf(initialActive) }
             var editorText by remember { mutableStateOf("") }
@@ -301,7 +304,7 @@ class MainActivity : ComponentActivity() {
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                            Text("Standalone file access check", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                            Text("AstraCode", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                             TextButton(onClick = { showAtelierPreview = true }, modifier = Modifier.testTag("open-atelier-preview")) { Text("UI Preview") }
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -350,7 +353,13 @@ class MainActivity : ComponentActivity() {
                         }
                         val selected = activeDocument
                         if (selected == null) {
-                            Text("No standalone file open.")
+                            EditorWelcomeScreen(
+                                modifier = Modifier.weight(1f).fillMaxWidth().testTag("editor-welcome-screen"),
+                                workspaceName = workspaceOptions.firstOrNull { it.id == activeWorkspaceId }?.name ?: "Private workspace",
+                                onOpenProjectFiles = { showWorkspaceBrowser = true },
+                                onOpenExternalFile = { documentPicker.launch(arrayOf("*/*")) },
+                                onManageFiles = { showSavedFiles = true },
+                            )
                         } else {
                             Text(selected.name, style = MaterialTheme.typography.titleMedium)
                             when {
@@ -455,6 +464,7 @@ class MainActivity : ComponentActivity() {
                         TextButton(onClick = { showSavedFiles = false }) { Text("Done") }
                     },
                 )
+            }
             }
         }
     }

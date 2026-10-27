@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Search
@@ -27,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 sealed class Screen(val route: String, val title: String) {
+    data object Editor : Screen("editor", "Editor")
     data object Files : Screen("files", "Files")
     data object Search : Screen("search", "Search")
     data object Safety : Screen("safety", "Safety")
@@ -39,7 +41,7 @@ fun AstraCodeBottomNav(
     onTabSelected: (Screen) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val screens = listOf(Screen.Files, Screen.Search, Screen.Safety, Screen.Trash)
+    val screens = listOf(Screen.Editor, Screen.Files, Screen.Search, Screen.Safety, Screen.Trash)
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -68,6 +70,7 @@ fun AstraCodeBottomNav(
                     verticalArrangement = Arrangement.Center,
                 ) {
                     val icon = when (screen) {
+                        Screen.Editor -> Icons.Outlined.Code
                         Screen.Files -> Icons.Outlined.FolderOpen
                         Screen.Search -> Icons.Outlined.Search
                         Screen.Safety -> Icons.Outlined.VerifiedUser
