@@ -85,8 +85,8 @@ class MainActivityUiTest {
         composeRule.onNodeWithTag("editor-welcome-screen").assertIsDisplayed()
         composeRule.onNodeWithText("Ready to code").assertIsDisplayed()
         composeRule.onNodeWithText("Browse project files").assertIsDisplayed()
-        composeRule.onNodeWithText("Open file").assertIsDisplayed()
-        composeRule.onNodeWithText("Manage files").assertIsDisplayed()
+        composeRule.onNodeWithTag("editor-welcome-open-file").assertIsDisplayed()
+        composeRule.onNodeWithTag("editor-welcome-manage-files").assertIsDisplayed()
     }
 
     @Test

@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 
 /**
@@ -94,7 +95,7 @@ fun EditorWelcomeScreen(
                 }
                 Button(
                     onClick = onOpenProjectFiles,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("editor-welcome-browse-project"),
                 ) {
                     Icon(Icons.Outlined.FolderOpen, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
@@ -106,7 +107,7 @@ fun EditorWelcomeScreen(
                 ) {
                     OutlinedButton(
                         onClick = onOpenExternalFile,
-                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("editor-welcome-open-file"),
                     ) {
                         Icon(Icons.Outlined.Description, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
@@ -114,7 +115,7 @@ fun EditorWelcomeScreen(
                     }
                     OutlinedButton(
                         onClick = onManageFiles,
-                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("editor-welcome-manage-files"),
                     ) {
                         Icon(Icons.Outlined.Folder, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
