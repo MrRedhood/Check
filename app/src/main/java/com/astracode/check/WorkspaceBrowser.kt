@@ -2607,6 +2607,7 @@ internal fun WorkspaceBrowserPanel(
                         TextButton(
                             onClick = {
                                 treeContextWorkspace = null
+                                showWorkspaceTree = false
                                 renameWorkspaceTarget = option
                                 renameWorkspaceName = option.name
                             },
@@ -2615,6 +2616,7 @@ internal fun WorkspaceBrowserPanel(
                         TextButton(
                             onClick = {
                                 treeContextWorkspace = null
+                                showWorkspaceTree = false
                                 pendingDeleteWorkspace = option
                             },
                             modifier = Modifier.fillMaxWidth().testTag("workspace-context-delete"),
