@@ -2,7 +2,7 @@ package com.astracode.check
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -72,6 +72,7 @@ internal fun WorkspaceTreeDialog(
     openedFile: String?,
     onNavigateToDirectory: (String) -> Unit,
     onOpenFile: (String) -> Unit,
+    onLongPressEntry: (String, Boolean) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var childrenByDirectory by remember(root) {
@@ -204,6 +205,7 @@ internal fun WorkspaceTreeDialog(
                                 isRoot = true,
                                 onToggleExpansion = { toggleDirectory("") },
                                 onSelect = { onNavigateToDirectory("") },
+                                onLongPress = { onLongPressEntry("", true) },
                             )
                         }
                         items(visibleEntries, key = { it.entry.path }) { visible ->
@@ -221,6 +223,7 @@ internal fun WorkspaceTreeDialog(
                                     if (entry.isDirectory) onNavigateToDirectory(entry.path)
                                     else onOpenFile(entry.path)
                                 },
+                                onLongPress = { onLongPressEntry(entry.path, entry.isDirectory) },
                             )
                         }
                     }
@@ -265,6 +268,7 @@ private fun WorkspaceTreeRow(
     isRoot: Boolean = false,
     onToggleExpansion: () -> Unit,
     onSelect: () -> Unit,
+    onLongPress: () -> Unit,
 ) {
     val selectedBackground = if (selected) {
         MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
@@ -277,7 +281,7 @@ private fun WorkspaceTreeRow(
             .fillMaxWidth()
             .height(42.dp)
             .background(selectedBackground)
-            .clickable(onClick = onSelect)
+            .combinedClickable(onClick = onSelect, onLongClick = onLongPress)
             .testTag(
                 if (isRoot) "workspace-tree-root"
                 else "workspace-tree-${if (isDirectory) "folder" else "file"}-${path.replace("/", "-")}",

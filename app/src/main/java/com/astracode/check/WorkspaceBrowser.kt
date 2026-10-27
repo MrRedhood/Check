@@ -156,6 +156,7 @@ internal fun WorkspaceBrowserPanel(
     var safetyTrashItems by remember(root) { mutableStateOf(emptyList<WorkspaceTrashItem>()) }
     var previewResult by remember(root) { mutableStateOf<WorkspacePreview?>(null) }
     var actionEntry by remember(root) { mutableStateOf<WorkspaceEntry?>(null) }
+    var treeContextEntry by remember(root) { mutableStateOf<WorkspaceEntry?>(null) }
     var pendingDeleteEntry by remember(root) { mutableStateOf<WorkspaceEntry?>(null) }
     var operationEntry by remember(root) { mutableStateOf<WorkspaceEntry?>(null) }
     var operationKind by remember(root) { mutableStateOf<String?>(null) }
@@ -2454,7 +2455,102 @@ internal fun WorkspaceBrowserPanel(
                     activateEditorFile(path)
                 }
             },
+            onLongPressEntry = { path, isDirectory ->
+                if (path.isBlank()) {
+                    treeContextEntry = WorkspaceEntry(
+                        path = "",
+                        name = root.name.ifBlank { "Workspace" },
+                        isDirectory = true,
+                        sizeBytes = 0L,
+                        isHidden = false,
+                    )
+                } else {
+                    val item = runCatching { resolveWorkspacePath(root, path) }.getOrNull()
+                    if (item != null && item.exists()) {
+                        treeContextEntry = WorkspaceEntry(
+                            path = path,
+                            name = item.name,
+                            isDirectory = isDirectory,
+                            sizeBytes = if (isDirectory) 0L else item.length(),
+                            isHidden = item.name.startsWith("."),
+                        )
+                    } else {
+                        message = "This item is no longer available."
+                    }
+                }
+            },
             onDismiss = { showWorkspaceTree = false },
+        )
+    }
+
+    treeContextEntry?.let { entry ->
+        AlertDialog(
+            onDismissRequest = { treeContextEntry = null },
+            title = { Text(entry.name + " options") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    if (entry.isDirectory) {
+                        TextButton(
+                            onClick = {
+                                treeContextEntry = null
+                                showWorkspaceTree = false
+                                createInDirectory = entry.path
+                                createFileName = ""
+                                showCreateFileDialog = true
+                            },
+                            modifier = Modifier.fillMaxWidth().testTag("workspace-tree-context-new-file"),
+                        ) { Text("New file") }
+                    }
+                    if (entry.path.isNotBlank()) {
+                        TextButton(
+                            onClick = {
+                                treeContextEntry = null
+                                showWorkspaceTree = false
+                                operationEntry = entry
+                                operationKind = "rename"
+                                operationInput = entry.name
+                            },
+                            modifier = Modifier.fillMaxWidth().testTag("workspace-tree-context-rename"),
+                        ) { Text("Rename") }
+                        TextButton(
+                            onClick = {
+                                treeContextEntry = null
+                                showWorkspaceTree = false
+                                pendingDeleteEntry = entry
+                            },
+                            modifier = Modifier.fillMaxWidth().testTag("workspace-tree-context-delete"),
+                        ) { Text("Delete") }
+                        TextButton(
+                            onClick = {
+                                treeContextEntry = null
+                                showWorkspaceTree = false
+                                pathPickerEntry = entry
+                                pathPickerDirectories = emptyList()
+                                pathPickerLoading = true
+                                pathPickerCreateFolder = false
+                                pathPickerFolderName = ""
+                                scope.launch {
+                                    val result = runCatching {
+                                        withContext(Dispatchers.IO) { listWorkspaceDirectories(root) }
+                                    }
+                                    result.onSuccess { pathPickerDirectories = it }
+                                        .onFailure { error ->
+                                            message = error.message ?: "Could not list destination folders."
+                                        }
+                                    pathPickerLoading = false
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().testTag("workspace-tree-context-change-path"),
+                        ) { Text("Change path") }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { treeContextEntry = null },
+                    modifier = Modifier.testTag("workspace-tree-context-cancel"),
+                ) { Text("Cancel") }
+            },
         )
     }
 
