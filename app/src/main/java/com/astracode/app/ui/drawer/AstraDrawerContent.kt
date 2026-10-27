@@ -890,6 +890,7 @@ private fun LspSection(state: DrawerUiState, onEvent: (DrawerEvent) -> Unit) {
                 } else {
                     AText("Diagnostics unavailable until a language server is connected.", C.Muted, 10f, mono = false)
                 }
+            }
         }
     }
 }
