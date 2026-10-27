@@ -602,6 +602,7 @@ private fun BufferRow(buffer: BufferUi, onClick: () -> Unit, onClose: () -> Unit
             .then(rowModifier)
             .heightIn(min = 44.dp)
             .clickable(onClick = onClick)
+            .testTag("drawer-buffer-" + buffer.path.replace("/", "__"))
             .padding(horizontal = 10.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
@@ -620,26 +621,27 @@ private fun BufferRow(buffer: BufferUi, onClick: () -> Unit, onClose: () -> Unit
                 if (buffer.isActive) FontWeight.SemiBold else FontWeight.Normal,
             )
         }
-        if (buffer.isActive) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (buffer.isActive) {
                 Box(
                     Modifier
                         .size(8.dp)
                         .shadow(8.dp, CircleShape, ambientColor = C.Primary.copy(alpha = 0.8f), spotColor = C.Primary.copy(alpha = 0.8f))
                         .background(C.Primary, CircleShape),
                 )
-                Box(
-                    Modifier
-                        .size(20.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .clickable(onClick = onClose),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(AstraIcons.Close, "Close buffer", Modifier.size(14.dp), C.Muted)
-                }
+            } else if (buffer.trailing.isNotBlank()) {
+                AText(buffer.trailing, C.Muted, 10f)
             }
-        } else {
-            AText(buffer.trailing, C.Muted, 10f)
+            Box(
+                Modifier
+                    .size(24.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .clickable(onClick = onClose)
+                    .testTag("drawer-buffer-close-" + buffer.path.replace("/", "__")),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(AstraIcons.Close, "Close buffer", Modifier.size(14.dp), C.Muted)
+            }
         }
     }
 }

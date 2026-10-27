@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.longClick
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -59,10 +60,25 @@ class AstraDrawerUiTest {
         composeRule.onNodeWithText("Rename").assertIsDisplayed()
         composeRule.onNodeWithText("Delete Workspace").assertIsDisplayed()
         composeRule.onNodeWithText("Cancel").assertIsDisplayed()
-        composeRule.runOnIdle {
-            assert(composeRule.onAllNodesWithText("Create File").fetchSemanticsNodes().isEmpty())
-            assert(composeRule.onAllNodesWithText("Create Folder").fetchSemanticsNodes().isEmpty())
+        assertTrue(composeRule.onAllNodesWithText("Create File").fetchSemanticsNodes().isEmpty())
+        assertTrue(composeRule.onAllNodesWithText("Create Folder").fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test
+    fun inactiveBufferStillHasAWorkingCloseControl() {
+        composeRule.setContent {
+            AstraEditorDrawer(
+                state = DrawerUiState.Empty.copy(
+                    buffers = listOf(
+                        BufferUi("Main.kt", FileBadge.Kotlin, "", isActive = true, path = "Main.kt"),
+                        BufferUi("Util.kt", FileBadge.Kotlin, "24 L", isActive = false, path = "src/Util.kt"),
+                    ),
+                ),
+                onEvent = {},
+                onClose = {},
+            )
         }
+        composeRule.onNodeWithTag("drawer-buffer-close-src__Util.kt").assertIsDisplayed()
     }
 
     @Test
@@ -76,6 +92,6 @@ class AstraDrawerUiTest {
             )
         }
         composeRule.onNodeWithTag("editor-drawer-outside-dismiss").performTouchInput { click() }
-        composeRule.runOnIdle { assert(closed) }
+        composeRule.runOnIdle { assertTrue(closed) }
     }
 }
