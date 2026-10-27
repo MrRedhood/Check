@@ -1286,6 +1286,49 @@ class MainActivityUiTest {
 
 
 
+
+    @Test
+    fun privateWorkspaceCanBeRenamedAndCleared() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val workspace = File(context.filesDir, "workspace")
+        workspace.deleteRecursively()
+        workspace.mkdirs()
+        val existing = File(workspace, "Existing.kt")
+        existing.writeText("fun main() = Unit\\n")
+        val preferences = context.getSharedPreferences("file_access_check", android.content.Context.MODE_PRIVATE)
+        preferences.edit()
+            .remove("named_workspaces")
+            .remove("private_workspace_name")
+            .apply()
+        composeRule.activityRule.scenario.recreate()
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching { composeRule.onNodeWithTag("open-workspace-browser-button").assertIsDisplayed() }.isSuccess
+        }
+        composeRule.onNodeWithTag("open-workspace-browser-button").performClick()
+        composeRule.onNodeWithTag("workspace-tree-menu-button").performClick()
+        composeRule.onNodeWithTag("workspace-tree-workspace-private").performTouchInput { longClick() }
+        composeRule.onNodeWithTag("workspace-context-rename").performClick()
+        composeRule.onNodeWithTag("workspace-rename-name").performTextReplacement("Starter Project")
+        composeRule.onNodeWithTag("workspace-rename-confirm").performClick()
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            preferences.getString("private_workspace_name", "") == "Starter Project"
+        }
+        composeRule.onNodeWithTag("workspace-tree-menu-button").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching {
+                composeRule.onNodeWithTag("workspace-tree-workspace-private").assertTextContains("Starter Project")
+            }.isSuccess
+        }
+        composeRule.onNodeWithTag("workspace-tree-workspace-private").performTouchInput { longClick() }
+        composeRule.onNodeWithTag("workspace-context-delete").performClick()
+        composeRule.onNodeWithTag("workspace-delete-confirm").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) { !existing.exists() && workspace.isDirectory }
+        assertFalse("Deleting the built-in workspace must clear its files", existing.exists())
+        assertTrue("The built-in workspace remains available as an empty fallback", workspace.isDirectory)
+    }
+
     @Test
     fun hamburgerTreeCreatesRenamesAndDeletesNamedWorkspaces() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext

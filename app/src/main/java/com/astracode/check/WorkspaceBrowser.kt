@@ -2603,25 +2603,23 @@ internal fun WorkspaceBrowserPanel(
             title = { Text(option.name + " options") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    if (!option.isBuiltIn) {
-                        TextButton(
-                            onClick = {
-                                treeContextWorkspace = null
-                                showWorkspaceTree = false
-                                renameWorkspaceTarget = option
-                                renameWorkspaceName = option.name
-                            },
-                            modifier = Modifier.fillMaxWidth().testTag("workspace-context-rename"),
-                        ) { Text("Rename") }
-                        TextButton(
-                            onClick = {
-                                treeContextWorkspace = null
-                                showWorkspaceTree = false
-                                pendingDeleteWorkspace = option
-                            },
-                            modifier = Modifier.fillMaxWidth().testTag("workspace-context-delete"),
-                        ) { Text("Delete") }
-                    }
+                    TextButton(
+                        onClick = {
+                            treeContextWorkspace = null
+                            showWorkspaceTree = false
+                            renameWorkspaceTarget = option
+                            renameWorkspaceName = option.name
+                        },
+                        modifier = Modifier.fillMaxWidth().testTag("workspace-context-rename"),
+                    ) { Text("Rename") }
+                    TextButton(
+                        onClick = {
+                            treeContextWorkspace = null
+                            showWorkspaceTree = false
+                            pendingDeleteWorkspace = option
+                        },
+                        modifier = Modifier.fillMaxWidth().testTag("workspace-context-delete"),
+                    ) { Text("Delete") }
                 }
             },
             confirmButton = {
@@ -2695,7 +2693,13 @@ internal fun WorkspaceBrowserPanel(
             onDismissRequest = { pendingDeleteWorkspace = null },
             title = { Text("Delete workspace?") },
             text = {
-                Text("Delete " + option.name + " and the files created inside this AstraCode workspace? This cannot be undone.")
+                Text(
+                    if (option.isBuiltIn) {
+                        "Delete all files in " + option.name + "? The built-in workspace entry will remain available as an empty fallback."
+                    } else {
+                        "Delete " + option.name + " and the files created inside this AstraCode workspace? This cannot be undone."
+                    },
+                )
             },
             confirmButton = {
                 TextButton(

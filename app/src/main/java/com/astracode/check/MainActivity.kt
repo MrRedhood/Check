@@ -58,6 +58,7 @@ private const val PREFS_NAME = "file_access_check"
 private const val SAVED_URIS_KEY = "saved_document_uris"
 private const val ACTIVE_URI_KEY = "active_document_uri"
 private const val WORKSPACES_KEY = "named_workspaces"
+private const val PRIVATE_WORKSPACE_NAME_KEY = "private_workspace_name"
 private const val MAX_DOCUMENT_BYTES = 8L * 1024L * 1024L
 
 private data class SavedDocument(
@@ -76,7 +77,12 @@ class MainActivity : ComponentActivity() {
             ?.let(Uri::parse)
             ?.let { uri -> initialDocuments.firstOrNull { it.uri == uri } }
         val initialWorkspaceOptions = listOf(
-            WorkspaceOption(id = "private", name = "Private workspace", isBuiltIn = true),
+            WorkspaceOption(
+                id = "private",
+                name = preferences.getString(PRIVATE_WORKSPACE_NAME_KEY, "Private workspace")
+                    ?.takeIf { it.isNotBlank() } ?: "Private workspace",
+                isBuiltIn = true,
+            ),
         ) + decodeWorkspaceOptions(preferences.getString(WORKSPACES_KEY, null))
 
         setContent {
@@ -110,11 +116,15 @@ class MainActivity : ComponentActivity() {
             }
 
             fun saveWorkspaceOptions(options: List<WorkspaceOption>) {
+                val privateName = options.firstOrNull { it.isBuiltIn }?.name
+                    ?: workspaceOptions.firstOrNull { it.isBuiltIn }?.name
+                    ?: "Private workspace"
                 workspaceOptions = listOf(
-                    WorkspaceOption(id = "private", name = "Private workspace", isBuiltIn = true),
+                    WorkspaceOption(id = "private", name = privateName, isBuiltIn = true),
                 ) + options.filterNot { it.isBuiltIn }
                 preferences.edit()
                     .putString(WORKSPACES_KEY, encodeWorkspaceOptions(options.filterNot { it.isBuiltIn }))
+                    .putString(PRIVATE_WORKSPACE_NAME_KEY, privateName)
                     .apply()
             }
 
@@ -161,7 +171,7 @@ class MainActivity : ComponentActivity() {
                     message = "Could not create the workspace folder."
                     return false
                 }
-                saveWorkspaceOptions(workspaceOptions.filterNot { it.isBuiltIn } + option)
+                saveWorkspaceOptions(workspaceOptions + option)
                 activeWorkspaceId = option.id
                 workspaceRoot = directory
                 message = "Created and opened workspace " + name
@@ -169,10 +179,6 @@ class MainActivity : ComponentActivity() {
             }
 
             fun renameWorkspace(option: WorkspaceOption, rawName: String): Boolean {
-                if (option.isBuiltIn) {
-                    message = "The built-in Private workspace cannot be renamed."
-                    return false
-                }
                 val name = rawName.trim()
                 if (name.isBlank()) {
                     message = "Enter a workspace name."
@@ -183,7 +189,7 @@ class MainActivity : ComponentActivity() {
                     return false
                 }
                 saveWorkspaceOptions(
-                    workspaceOptions.filterNot { it.isBuiltIn }.map {
+                    workspaceOptions.map {
                         if (it.id == option.id) it.copy(name = name) else it
                     },
                 )
@@ -193,7 +199,22 @@ class MainActivity : ComponentActivity() {
 
             fun deleteWorkspace(option: WorkspaceOption) {
                 if (option.isBuiltIn) {
-                    message = "The built-in Private workspace is kept as a safe fallback."
+                    val appFiles = filesDir.canonicalFile
+                    val directory = File(filesDir, "workspace").canonicalFile
+                    if (directory.parentFile != appFiles || directory.name != "workspace") {
+                        message = "Refused to clear a workspace outside the app workspace folder."
+                        return
+                    }
+                    if (directory.exists() && !directory.deleteRecursively()) {
+                        message = "Could not clear the Private workspace."
+                        return
+                    }
+                    if (!directory.mkdirs() && !directory.isDirectory) {
+                        message = "Could not recreate the empty Private workspace."
+                        return
+                    }
+                    if (activeWorkspaceId == option.id) workspaceRoot = directory
+                    message = "Cleared files from " + option.name + ". The built-in workspace remains available and empty."
                     return
                 }
                 val parent = File(filesDir, "named-workspaces").canonicalFile
