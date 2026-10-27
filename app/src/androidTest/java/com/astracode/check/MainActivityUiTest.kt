@@ -518,7 +518,7 @@ class MainActivityUiTest {
         composeRule.activityRule.scenario.onActivity { activity ->
             activity.onBackPressedDispatcher.onBackPressed()
         }
-        composeRule.onNodeWithText("Standalone file access check").assertIsDisplayed()
+        composeRule.onNodeWithText("AstraCode").assertIsDisplayed()
         composeRule.activityRule.scenario.onActivity { activity ->
             assertFalse("Returning from the preview must leave the app open.", activity.isFinishing)
         }
