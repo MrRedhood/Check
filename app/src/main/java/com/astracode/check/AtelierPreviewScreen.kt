@@ -27,6 +27,7 @@ import com.astracode.ui.models.AtelierFileItem
 import com.astracode.ui.models.AtelierSearchResult
 import com.astracode.ui.models.AtelierStorageHealth
 import com.astracode.ui.models.AtelierTrashItem
+import com.astracode.ui.screens.EditorWelcomeScreen
 import com.astracode.ui.screens.FilesScreen
 import com.astracode.ui.screens.SafetyScreen
 import com.astracode.ui.screens.SearchScreen
@@ -94,6 +95,13 @@ fun AtelierPreviewScreen(onBack: () -> Unit) {
                 }
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 when (currentScreen.value) {
+                    Screen.Editor -> EditorWelcomeScreen(
+                        modifier = Modifier.fillMaxSize(),
+                        workspaceName = "Preview workspace",
+                        onOpenProjectFiles = { selectScreen(Screen.Files) },
+                        onOpenExternalFile = { message.value = "Preview only: external file access is unavailable here." },
+                        onManageFiles = { selectScreen(Screen.Files) },
+                    )
                     Screen.Files -> FilesScreen(
                         rootName = "AstraCode workspace", currentDirectory = "", storageLabel = "Preview mode",
                         items = demoFiles, selectedPaths = selectedPaths.value, selectionMode = selectionMode.value, savedWorkspaceCount = 0,
