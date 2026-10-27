@@ -879,12 +879,17 @@ private fun LspSection(state: DrawerUiState, onEvent: (DrawerEvent) -> Unit) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                AText("Diagnostics:", C.Muted, 11f)
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    AstraBadge("${state.lspErrors} err", C.Error, C.Error.copy(alpha = 0.2f), null, size = 10f, weight = FontWeight.Bold)
-                    AstraBadge("${state.lspWarnings} warn", C.Warning, C.Warning.copy(alpha = 0.2f), null, size = 10f, weight = FontWeight.Bold)
+                if (state.lspStatus.equals("Ready", ignoreCase = true)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        AText("Diagnostics:", C.Muted, 11f)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            AstraBadge("${state.lspErrors} err", C.Error, C.Error.copy(alpha = 0.2f), null, size = 10f, weight = FontWeight.Bold)
+                            AstraBadge("${state.lspWarnings} warn", C.Warning, C.Warning.copy(alpha = 0.2f), null, size = 10f, weight = FontWeight.Bold)
+                        }
+                    }
+                } else {
+                    AText("Diagnostics unavailable until a language server is connected.", C.Muted, 10f, mono = false)
                 }
-            }
         }
     }
 }
@@ -1005,7 +1010,10 @@ private fun ToolDock(state: DrawerUiState, onEvent: (DrawerEvent) -> Unit) {
                 Icon(AstraIcons.Terminal, "Terminal", Modifier.size(16.dp), C.Primary)
             }
             DockTile(
-                Modifier.weight(1f), "+${state.gitAdded} -${state.gitRemoved}", C.Secondary, FontWeight.SemiBold,
+                Modifier.weight(1f),
+                if (state.gitAvailable) "+${state.gitAdded} -${state.gitRemoved}" else "Git",
+                if (state.gitAvailable) C.Secondary else C.Muted,
+                FontWeight.SemiBold,
                 { onEvent(DrawerEvent.Action(DrawerAction.OpenGitChanges)) },
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
