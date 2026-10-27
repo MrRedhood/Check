@@ -38,8 +38,8 @@ class DrawerViewModel : ViewModel() {
                 }
             }
 
-            is DrawerEvent.BufferClicked -> _effects.tryEmit(DrawerEffect.OpenBuffer(event.name))
-            is DrawerEvent.BufferClosed -> _effects.tryEmit(DrawerEffect.CloseBuffer(event.name))
+            is DrawerEvent.BufferClicked -> _effects.tryEmit(DrawerEffect.OpenBuffer(event.path))
+            is DrawerEvent.BufferClosed -> _effects.tryEmit(DrawerEffect.CloseBuffer(event.path))
             is DrawerEvent.Action -> _effects.tryEmit(DrawerEffect.RunAction(event.action))
 
             DrawerEvent.ToggleFileOps -> _state.update { it.copy(fileOpsExpanded = !it.fileOpsExpanded) }

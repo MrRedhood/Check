@@ -48,6 +48,7 @@ data class BufferUi(
     val trailing: String,
     val isActive: Boolean,
     val path: String = name,
+    val isDirty: Boolean = false,
 )
 
 @Immutable
@@ -117,14 +118,27 @@ data class DrawerUiState(
     }
 }
 
+internal fun fileBadgeForPath(path: String): FileBadge {
+    val extension = path.substringAfterLast('/').substringAfterLast('.', missingDelimiterValue = "").lowercase()
+    return when (extension) {
+        "rs" -> FileBadge.Rust
+        "toml" -> FileBadge.Toml
+        "kt", "kts" -> FileBadge.Kotlin
+        "java" -> FileBadge.Java
+        "xml" -> FileBadge.Xml
+        "json" -> FileBadge.Json
+        else -> FileBadge.Text
+    }
+}
+
 sealed interface DrawerEvent {
     data class SectionSelected(val section: DrawerSection) : DrawerEvent
     data class WorkspaceClicked(val id: String) : DrawerEvent
     data class WorkspaceLongPressed(val id: String) : DrawerEvent
     data object WorkspaceOptionsDismissed : DrawerEvent
     data class WorkspaceOptionSelected(val workspaceId: String, val action: WorkspaceAction) : DrawerEvent
-    data class BufferClicked(val name: String) : DrawerEvent
-    data class BufferClosed(val name: String) : DrawerEvent
+    data class BufferClicked(val name: String, val path: String = name) : DrawerEvent
+    data class BufferClosed(val name: String, val path: String = name) : DrawerEvent
     data class Action(val action: DrawerAction) : DrawerEvent
     data object ToggleFileOps : DrawerEvent
     data object ToggleLsp : DrawerEvent

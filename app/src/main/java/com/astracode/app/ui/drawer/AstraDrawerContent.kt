@@ -557,8 +557,8 @@ private fun FilesSection(state: DrawerUiState, onEvent: (DrawerEvent) -> Unit) {
                 state.buffers.forEach { buffer ->
                     BufferRow(
                         buffer = buffer,
-                        onClick = { onEvent(DrawerEvent.BufferClicked(buffer.name)) },
-                        onClose = { onEvent(DrawerEvent.BufferClosed(buffer.name)) },
+                        onClick = { onEvent(DrawerEvent.BufferClicked(buffer.name, buffer.path)) },
+                        onClose = { onEvent(DrawerEvent.BufferClosed(buffer.name, buffer.path)) },
                     )
                 }
             }
@@ -622,6 +622,9 @@ private fun BufferRow(buffer: BufferUi, onClick: () -> Unit, onClose: () -> Unit
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (buffer.isDirty) {
+                AstraBadge("M", C.Warning, C.Warning.copy(alpha = 0.2f), C.Warning.copy(alpha = 0.3f))
+            }
             if (buffer.isActive) {
                 Box(
                     Modifier
