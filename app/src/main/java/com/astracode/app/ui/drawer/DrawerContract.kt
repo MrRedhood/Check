@@ -100,7 +100,7 @@ data class DrawerUiState(
             buffers = emptyList(),
             unsavedCount = 0,
             aiModelLabel = "Not connected",
-            aiFixLabel = "AI assistant is not connected",
+            aiFixLabel = "AI tools are not connected",
             aiFixCode = "",
             lspName = "Language services",
             lspStatus = "Not connected",

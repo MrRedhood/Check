@@ -7,11 +7,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.longClick
 import org.junit.Rule
@@ -60,9 +60,7 @@ class AstraDrawerUiTest {
                     state.optionsTarget?.let { target ->
                         WorkspaceOptionsOverlay(
                             workspaceName = target.name,
-                            onAction = { action ->
-                                state = state.copy(optionsTarget = null)
-                            },
+                            onAction = { state = state.copy(optionsTarget = null) },
                             onDismiss = { state = state.copy(optionsTarget = null) },
                         )
                     }
@@ -75,6 +73,7 @@ class AstraDrawerUiTest {
         composeRule.onNodeWithText("Rename").assertExists()
         composeRule.onNodeWithText("Delete Workspace").assertExists()
         composeRule.onNodeWithText("Cancel").assertExists()
-        composeRule.onNodeWithText("Create File").assertExists()
+        composeRule.onNodeWithText("Create File").assertDoesNotExist()
+        composeRule.onNodeWithText("Create Folder").assertDoesNotExist()
     }
 }

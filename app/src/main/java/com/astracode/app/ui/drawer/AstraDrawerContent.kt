@@ -475,16 +475,15 @@ private fun WorkspaceRow(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            when (ws.kind) {
-                WorkspaceKind.Active -> Box(
-                    Modifier
-                        .size(10.dp)
+            when {
+                isActive -> Box(
+                    Modifier.size(10.dp)
                         .drawBehind { drawCircle(C.Primary.copy(alpha = 0.2f), radius = size.minDimension / 2f + 4.dp.toPx()) }
                         .background(C.Primary, CircleShape),
                 )
-                WorkspaceKind.Private -> Icon(AstraIcons.Lock, null, Modifier.size(16.dp), C.Muted)
-                WorkspaceKind.Managed -> Icon(AstraIcons.Folder, null, Modifier.size(16.dp), C.Secondary)
-                WorkspaceKind.RemoteBookmark -> Icon(AstraIcons.Link, null, Modifier.size(16.dp), C.Secondary)
+                ws.kind == WorkspaceKind.Private -> Icon(AstraIcons.Lock, null, Modifier.size(16.dp), C.Muted)
+                ws.kind == WorkspaceKind.Managed -> Icon(AstraIcons.Folder, null, Modifier.size(16.dp), C.Secondary)
+                else -> Icon(AstraIcons.Link, null, Modifier.size(16.dp), C.Secondary)
             }
             Column(Modifier.weight(1f, fill = false)) {
                 AText(
@@ -509,9 +508,7 @@ private fun WorkspaceRow(
         }
         if (isActive) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (ws.modifiedCount > 0) {
-                    AstraBadge("${ws.modifiedCount}", C.Warning, C.Warning.copy(alpha = 0.2f), C.Warning.copy(alpha = 0.3f))
-                }
+                if (ws.modifiedCount > 0) AstraBadge("${ws.modifiedCount}", C.Warning, C.Warning.copy(alpha = 0.2f), C.Warning.copy(alpha = 0.3f))
                 Icon(AstraIcons.Check, null, Modifier.size(16.dp), C.Primary)
             }
         } else {
@@ -521,9 +518,7 @@ private fun WorkspaceRow(
                 WorkspaceKind.Managed, WorkspaceKind.RemoteBookmark -> Box(
                     Modifier.size(28.dp).clip(RoundedCornerShape(4.dp)).clickable(onClick = onLongClick),
                     contentAlignment = Alignment.Center,
-                ) {
-                    Icon(AstraIcons.MoreVert, "Workspace menu", Modifier.size(16.dp), C.Muted)
-                }
+                ) { Icon(AstraIcons.MoreVert, "Workspace menu", Modifier.size(16.dp), C.Muted) }
             }
         }
     }
@@ -568,7 +563,7 @@ private fun FilesSection(state: DrawerUiState, onEvent: (DrawerEvent) -> Unit) {
                 }
             }
             Column(Modifier.fillMaxWidth().borderTop(C.Border.copy(alpha = 0.6f))) {
-                NavLinkRow(AstraIcons.FolderOpen, "Open Explorer", { onEvent(DrawerEvent.Action(DrawerAction.OpenExplorer)) }) {
+                NavLinkRow(AstraIcons.Folder, "Open Explorer", { onEvent(DrawerEvent.Action(DrawerAction.OpenExplorer)) }) {
                     AText("Browse workspace", C.Muted, 10f)
                 }
                 NavDivider()
@@ -1012,3 +1007,38 @@ private fun ToolDock(state: DrawerUiState, onEvent: (DrawerEvent) -> Unit) {
                     Icon(AstraIcons.GitCircle, "Git Changes", Modifier.size(14.dp), C.Secondary)
                 }
             }
+            DockTile(Modifier.weight(1f), "Test", C.Text, FontWeight.SemiBold, { onEvent(DrawerEvent.Action(DrawerAction.RunTests)) }) {
+                Icon(AstraIcons.Play, "Run Cargo Tests", Modifier.size(16.dp), C.Warning)
+            }
+            DockTile(Modifier.weight(1f), "Config", C.Muted, FontWeight.Normal, { onEvent(DrawerEvent.Action(DrawerAction.OpenConfig)) }) {
+                Icon(AstraIcons.Gear, "Quick Settings", Modifier.size(16.dp), C.Muted)
+            }
+        }
+    }
+}
+
+@Composable
+private fun DockTile(
+    modifier: Modifier,
+    label: String,
+    labelColor: Color,
+    weight: FontWeight,
+    onClick: () -> Unit,
+    icon: @Composable () -> Unit,
+) {
+    val source = remember { MutableInteractionSource() }
+    Column(
+        modifier
+            .pressScale(source)
+            .panel(RoundedCornerShape(12.dp), C.Card, C.Border)
+            .heightIn(min = 48.dp)
+            .clickable(interactionSource = source, indication = null, onClick = onClick)
+            .padding(vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        icon()
+        Spacer(Modifier.height(4.dp))
+        AText(label, labelColor, 9f, weight = weight)
+    }
+}
