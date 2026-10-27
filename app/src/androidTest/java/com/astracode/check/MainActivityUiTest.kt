@@ -82,7 +82,11 @@ class MainActivityUiTest {
     fun workspaceShowsStandaloneFilePickerAction() {
         composeRule.onNodeWithTag("open-standalone-file-button").assertIsDisplayed()
         composeRule.onNodeWithTag("manage-saved-documents-button").assertIsDisplayed()
-        composeRule.onNodeWithText("No standalone file open.").assertIsDisplayed()
+        composeRule.onNodeWithTag("editor-welcome-screen").assertIsDisplayed()
+        composeRule.onNodeWithText("Ready to code").assertIsDisplayed()
+        composeRule.onNodeWithText("Browse project files").assertIsDisplayed()
+        composeRule.onNodeWithText("Open file").assertIsDisplayed()
+        composeRule.onNodeWithText("Manage files").assertIsDisplayed()
     }
 
     @Test
